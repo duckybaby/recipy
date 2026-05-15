@@ -37,9 +37,15 @@ import {
   buildRecomputePrompt,
   buildSubstitutionsPrompt,
 } from "./prompts";
-import { callWithWebSearch, callPlain, parseJsonLoose } from "./anthropic";
+import {
+  callWithWebSearch,
+  callPlain,
+  parseJsonLoose,
+  streamWithWebSearch,
+} from "./anthropic";
 import { readCache, writeCache, logFeedback } from "./cache";
 import { verifyAppCheck } from "./appCheck";
+import { JsonArrayStream } from "./streamingJson";
 
 // ----- Firebase admin (lazy init for emulator + production) -----
 if (getApps().length === 0) initializeApp();
@@ -94,6 +100,17 @@ function asyncHandler(
 
 // ----- /api/search-recipes -----
 
+// /api/search-recipes — STREAMING NDJSON RESPONSE
+//
+// Response format: one JSON object per line (newline-delimited JSON).
+// Object shapes:
+//   {"type":"recipe","recipe":<Recipe>}    -- one valid recipe ready to render
+//   {"type":"done","count":N,"cached":bool} -- end of stream marker
+//   {"type":"error","message":"..."}       -- non-fatal stream error
+//
+// Cache hits also use the streaming protocol so the frontend has one
+// code path. The "cached" flag in the done message lets the UI skip the
+// loading copy when content was instant.
 app.post(
   "/api/search-recipes",
   asyncHandler(async (req, res) => {
@@ -105,45 +122,64 @@ app.post(
     }
     const filters = parsed.data;
 
-    // 1) Cache check.
+    // Set headers for NDJSON streaming. X-Accel-Buffering: no asks any
+    // proxy in front (Firebase Hosting / Cloud Run frontend) to flush
+    // rather than buffer the response.
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    const writeLine = (obj: unknown) => {
+      res.write(JSON.stringify(obj) + "\n");
+    };
+
+    // 1) Cache check — emit immediately if hit.
     const cached = await readCache(filters);
     if (cached) {
       console.log(`cache hit: ${cached.length} recipes`);
-      return res.json({ recipes: cached });
+      for (const recipe of cached) {
+        writeLine({ type: "recipe", recipe });
+      }
+      writeLine({ type: "done", count: cached.length, cached: true });
+      return res.end();
     }
 
-    // 2) Call Claude with web search.
-    const text = await callWithWebSearch({
-      apiKey: ANTHROPIC_API_KEY.value(),
-      system: SEARCH_SYSTEM_PROMPT,
-      user: buildSearchUserPrompt(filters),
-    });
+    // 2) Stream from Claude with web search; emit each recipe as its
+    // closing brace arrives.
+    const collected: Recipe[] = [];
+    const parser = new JsonArrayStream();
 
-    // 3) Parse and validate every recipe; drop ones that fail.
-    // If the model truncated its JSON output (max_tokens hit), parseJsonLoose
-    // throws. We catch and return empty so the user sees the friendly empty
-    // state rather than a "Unterminated string" error.
-    let raw: unknown;
     try {
-      raw = parseJsonLoose<unknown[]>(text);
+      for await (const chunk of streamWithWebSearch({
+        apiKey: ANTHROPIC_API_KEY.value(),
+        system: SEARCH_SYSTEM_PROMPT,
+        user: buildSearchUserPrompt(filters),
+      })) {
+        const objects = parser.push(chunk);
+        for (const obj of objects) {
+          const valid = safeParseRecipe(reIdRecipe(obj));
+          if (valid) {
+            collected.push(valid);
+            writeLine({ type: "recipe", recipe: valid });
+          }
+        }
+      }
     } catch (err) {
-      console.warn("search: JSON parse failed", err, "first 500 chars:", text.slice(0, 500));
-      return res.json({ recipes: [] });
-    }
-    if (!Array.isArray(raw)) {
-      return res.json({ recipes: [] });
-    }
-    const recipes: Recipe[] = [];
-    for (const item of raw) {
-      const valid = safeParseRecipe(reIdRecipe(item));
-      if (valid) recipes.push(valid);
+      console.error("search stream error:", err);
+      writeLine({
+        type: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+      writeLine({ type: "done", count: collected.length, cached: false });
+      return res.end();
     }
 
-    console.log(`search returned ${recipes.length}/${raw.length} valid recipes`);
+    console.log(`search streamed ${collected.length} valid recipes`);
 
-    // 4) Cache and return.
-    await writeCache(filters, recipes);
-    return res.json({ recipes });
+    // 3) Cache the full result (fire and forget — don't block the end).
+    void writeCache(filters, collected);
+    writeLine({ type: "done", count: collected.length, cached: false });
+    return res.end();
   }),
 );
 

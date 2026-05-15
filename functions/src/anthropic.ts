@@ -1,15 +1,23 @@
 // Thin wrapper around the Anthropic SDK.
 //
-// Centralises model name, max_tokens, the web_search tool definition, and
+// Centralises model names, max_tokens, the web_search tool definition, and
 // the "pull text out of an interleaved response" helper. Endpoints call
 // these helpers instead of touching the SDK directly.
 
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = "claude-sonnet-4-6";
+// Search + alternate-source endpoints use Haiku for ~3x faster output
+// generation than Sonnet. Our Zod validator silently drops any recipe
+// that fails the §9 schema, so an occasional weaker recipe just thins
+// the response — never crashes the request.
+const SEARCH_MODEL = "claude-haiku-4-5";
+
+// Recompute + substitutions endpoints stay on Sonnet — small payloads,
+// less frequent calls, and we want strict accuracy on the math.
+const PLAIN_MODEL = "claude-sonnet-4-6";
+
 // Recipe payloads run ~5-8K chars each; 3 recipes ≈ 18-25K chars ≈ 5-7K
-// output tokens. 16384 gives plenty of headroom. 8192 was still truncating.
-// (Tier 1 OTPM is 8K but Claude uses only what it needs — this is a ceiling.)
+// output tokens. 16384 gives plenty of headroom.
 const MAX_TOKENS = 16384;
 
 let cachedClient: Anthropic | null = null;
@@ -23,7 +31,10 @@ export function getClient(apiKey: string): Anthropic {
   return cachedClient;
 }
 
-/** Call the model with web search enabled — used by search + alternate-source. */
+/**
+ * Call the model with web search enabled and return the full final text.
+ * Used by find-alternate-source (single recipe → no streaming benefit).
+ */
 export async function callWithWebSearch(opts: {
   apiKey: string;
   system: string;
@@ -31,12 +42,8 @@ export async function callWithWebSearch(opts: {
 }): Promise<string> {
   const client = getClient(opts.apiKey);
   const response = await client.messages.create({
-    model: MODEL,
+    model: SEARCH_MODEL,
     max_tokens: MAX_TOKENS,
-    // The web_search tool is a server-side tool — the model invokes it and
-    // we get the final assistant text once it has finished its tool loop.
-    // max_uses=3 keeps total input tokens (system + tool results) under
-    // ~25K so we don't hit Anthropic Tier 1 rate limit (30K ITPM).
     tools: [
       { type: "web_search_20250305", name: "web_search", max_uses: 3 },
     ] as unknown as Anthropic.Tool[], // SDK types lag the server-tool schema
@@ -44,6 +51,41 @@ export async function callWithWebSearch(opts: {
     messages: [{ role: "user", content: opts.user }],
   });
   return extractFinalText(response);
+}
+
+/**
+ * Stream the model's final text output as it's generated. Used by
+ * /api/search-recipes so the frontend can render each recipe as it
+ * completes, instead of waiting for the whole array.
+ *
+ * Yields text chunks as they arrive. Web search tool calls happen
+ * server-side inside Anthropic; we only see streamed text during the
+ * model's final response generation phase.
+ */
+export async function* streamWithWebSearch(opts: {
+  apiKey: string;
+  system: string;
+  user: string;
+}): AsyncGenerator<string, void, unknown> {
+  const client = getClient(opts.apiKey);
+  const stream = client.messages.stream({
+    model: SEARCH_MODEL,
+    max_tokens: MAX_TOKENS,
+    tools: [
+      { type: "web_search_20250305", name: "web_search", max_uses: 3 },
+    ] as unknown as Anthropic.Tool[],
+    system: opts.system,
+    messages: [{ role: "user", content: opts.user }],
+  });
+
+  for await (const event of stream) {
+    if (
+      event.type === "content_block_delta" &&
+      event.delta.type === "text_delta"
+    ) {
+      yield event.delta.text;
+    }
+  }
 }
 
 /** Call the model without tools — used by recompute + substitutions. */
@@ -54,7 +96,7 @@ export async function callPlain(opts: {
 }): Promise<string> {
   const client = getClient(opts.apiKey);
   const response = await client.messages.create({
-    model: MODEL,
+    model: PLAIN_MODEL,
     max_tokens: 1024,
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],

@@ -52,11 +52,96 @@ async function post<TBody, TResponse>(
   return (await res.json()) as TResponse;
 }
 
+// ----- Streaming search -----
+
+/**
+ * Stream recipes from /api/search-recipes (NDJSON). Each recipe arrives
+ * via `onRecipe` as soon as its closing brace lands on the backend; the
+ * promise resolves with the full array + cache flag once "done" arrives.
+ *
+ * Aborts cleanly if `signal` is triggered (e.g. component unmount).
+ */
+async function searchRecipesStream(
+  filters: SearchFilters,
+  onRecipe: (recipe: Recipe) => void,
+  signal?: AbortSignal,
+): Promise<{ recipes: Recipe[]; cached: boolean }> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const appCheckToken = await getAppCheckToken();
+  if (appCheckToken) headers["X-Firebase-AppCheck"] = appCheckToken;
+
+  const res = await fetch(`${API_BASE}/api/search-recipes`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(filters),
+    signal,
+  });
+
+  if (!res.ok) {
+    let code = "http_error";
+    let message = res.statusText;
+    try {
+      const err = await res.json();
+      code = err.error?.code ?? code;
+      message = err.error?.message ?? message;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(code, message, res.status);
+  }
+
+  if (!res.body) {
+    throw new ApiError("no_body", "Response had no body", 500);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const recipes: Recipe[] = [];
+  let cached = false;
+  let streamError: string | null = null;
+
+  // Read line-delimited JSON.
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line) continue;
+      let msg: { type: string; [k: string]: unknown };
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        continue; // skip malformed line
+      }
+      if (msg.type === "recipe" && msg.recipe) {
+        const r = msg.recipe as Recipe;
+        recipes.push(r);
+        onRecipe(r);
+      } else if (msg.type === "done") {
+        cached = Boolean(msg.cached);
+      } else if (msg.type === "error") {
+        streamError = String(msg.message ?? "Stream error");
+      }
+    }
+  }
+
+  if (streamError && recipes.length === 0) {
+    throw new ApiError("stream_error", streamError, 500);
+  }
+
+  return { recipes, cached };
+}
+
 // ----- Endpoint clients -----
 
 export const api = {
-  searchRecipes: (filters: SearchFilters) =>
-    post<SearchFilters, { recipes: Recipe[] }>("/api/search-recipes", filters),
+  searchRecipes: searchRecipesStream,
 
   findAlternateSource: (dish: string, excludeUrls: string[]) =>
     post<{ dish: string; excludeUrls: string[] }, { recipe: Recipe }>(

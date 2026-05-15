@@ -1,8 +1,8 @@
 // Screen 2 — Results list — spec §4.
 //
-// Reads filters from URL, fetches /api/search-recipes, renders the cards.
-// Persists the result to `last-search` localStorage (spec §7.9) so a
-// refresh inside 24h doesn't re-hit the API.
+// Reads filters from URL, streams /api/search-recipes (NDJSON), renders
+// cards as each recipe arrives. Persists the result to `last-search`
+// localStorage (spec §7.9) so a refresh inside 24h skips the network.
 
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -17,8 +17,21 @@ import { api, ApiError } from "../lib/api";
 import { getLastSearch, setLastSearch } from "../lib/storage";
 import type { Recipe } from "../lib/types";
 
+// We tell Claude to return exactly 3 recipes (see functions/src/prompts.ts).
+const TARGET_RECIPE_COUNT = 3;
+
+// Cycle through these while we wait for the first recipe to stream in.
+// Hidden the moment any card lands.
+const PROGRESS_MESSAGES = [
+  "Reading a few recipe sites for you.",
+  "Comparing options.",
+  "Reading the cooking steps.",
+  "Polishing the cards.",
+  "Almost there.",
+];
+
 type State =
-  | { kind: "loading" }
+  | { kind: "loading"; recipes: Recipe[] } // recipes streaming in
   | { kind: "ok"; recipes: Recipe[] }
   | { kind: "error"; message: string };
 
@@ -28,11 +41,14 @@ export default function Results() {
   const filters = decodeFilters(params);
   const filtersKey = params.toString();
 
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const [state, setState] = useState<State>({ kind: "loading", recipes: [] });
+  const [progressIndex, setProgressIndex] = useState(0);
 
   useEffect(() => {
+    const ctrl = new AbortController();
     let cancelled = false;
-    setState({ kind: "loading" });
+    setState({ kind: "loading", recipes: [] });
+    setProgressIndex(0);
 
     // 1) Try the localStorage cache first — instant render when she refreshes
     //    or navigates back within 24 hours.
@@ -42,11 +58,22 @@ export default function Results() {
       return; // don't re-fetch on identical filters within the TTL.
     }
 
-    // 2) Real API call.
+    // 2) Streaming API call — each recipe pushes a state update.
     (async () => {
       try {
         const body = toApiBody(filters);
-        const { recipes } = await api.searchRecipes(body);
+        const { recipes } = await api.searchRecipes(
+          body,
+          (recipe) => {
+            if (cancelled) return;
+            setState((prev) =>
+              prev.kind === "loading"
+                ? { kind: "loading", recipes: [...prev.recipes, recipe] }
+                : prev,
+            );
+          },
+          ctrl.signal,
+        );
         if (cancelled) return;
         setLastSearch({
           filters,
@@ -56,14 +83,13 @@ export default function Results() {
         setState({ kind: "ok", recipes });
       } catch (err) {
         if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         const raw =
           err instanceof ApiError
             ? err.message
             : err instanceof Error
               ? err.message
               : null;
-        // Empty-string messages would render a blank line under the
-        // "Couldn't load recipes" header. Fall back to something useful.
         const message =
           raw && raw.trim().length > 0
             ? raw
@@ -74,20 +100,41 @@ export default function Results() {
 
     return () => {
       cancelled = true;
+      ctrl.abort();
     };
     // We use the URL string as the dep so identical filters don't re-fetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtersKey]);
 
+  // Cycle progress copy while waiting for the first recipe.
+  const showProgress = state.kind === "loading" && state.recipes.length === 0;
+  useEffect(() => {
+    if (!showProgress) return;
+    const id = window.setInterval(() => {
+      setProgressIndex((i) => (i + 1) % PROGRESS_MESSAGES.length);
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [showProgress]);
+
   const back = () => navigate({ pathname: "/", search: params.toString() });
   const retry = () => {
-    // Force a fresh fetch by clearing the cached filters check.
-    setState({ kind: "loading" });
-    // Re-trigger effect by toggling a noop param (or just call directly).
+    // Bumping a noop URL param doesn't help because filtersKey is the dep
+    // — just re-run the effect by clearing the cache and forcing a fetch.
+    setState({ kind: "loading", recipes: [] });
+    const ctrl = new AbortController();
     (async () => {
       try {
         const body = toApiBody(filters);
-        const { recipes } = await api.searchRecipes(body);
+        const { recipes } = await api.searchRecipes(
+          body,
+          (recipe) =>
+            setState((prev) =>
+              prev.kind === "loading"
+                ? { kind: "loading", recipes: [...prev.recipes, recipe] }
+                : prev,
+            ),
+          ctrl.signal,
+        );
         setLastSearch({
           filters,
           recipes,
@@ -95,6 +142,7 @@ export default function Results() {
         });
         setState({ kind: "ok", recipes });
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         const message =
           err instanceof Error ? err.message : "Something went wrong";
         setState({ kind: "error", message });
@@ -123,29 +171,61 @@ export default function Results() {
         </button>
       </header>
 
-      {state.kind === "loading" ? (
-        <>
-          <p className="mt-1 mb-4 text-caption text-ink-muted">
-            Reading a few recipe sites for you.
-          </p>
-          <div className="flex flex-col gap-4">
-            <RecipeCardSkeleton />
-            <RecipeCardSkeleton />
-            <RecipeCardSkeleton />
-          </div>
-        </>
-      ) : state.kind === "error" ? (
+      {state.kind === "error" ? (
         <ErrorState message={state.message} onRetry={retry} onBack={back} />
-      ) : state.recipes.length === 0 ? (
+      ) : state.kind === "loading" && state.recipes.length === 0 ? (
+        <LoadingState progressIndex={progressIndex} />
+      ) : state.kind === "ok" && state.recipes.length === 0 ? (
         <EmptyState onBack={back} />
       ) : (
-        <div className="mt-4 flex flex-col gap-4">
-          {state.recipes.map((r) => (
-            <RecipeCard key={r.id} recipe={r} />
-          ))}
-        </div>
+        <StreamingList
+          recipes={state.recipes}
+          loading={state.kind === "loading"}
+        />
       )}
     </main>
+  );
+}
+
+function LoadingState({ progressIndex }: { progressIndex: number }) {
+  return (
+    <>
+      <p
+        className="mt-1 mb-4 text-caption text-ink-muted transition-opacity duration-300"
+        aria-live="polite"
+      >
+        {PROGRESS_MESSAGES[progressIndex]}
+      </p>
+      <div className="flex flex-col gap-4">
+        {Array.from({ length: TARGET_RECIPE_COUNT }).map((_, i) => (
+          <RecipeCardSkeleton key={i} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function StreamingList({
+  recipes,
+  loading,
+}: {
+  recipes: Recipe[];
+  loading: boolean;
+}) {
+  // Render real cards for each recipe we have, and skeletons for the
+  // slots we're still waiting on (only while loading).
+  const pending = loading
+    ? Math.max(0, TARGET_RECIPE_COUNT - recipes.length)
+    : 0;
+  return (
+    <div className="mt-4 flex flex-col gap-4">
+      {recipes.map((r) => (
+        <RecipeCard key={r.id} recipe={r} />
+      ))}
+      {Array.from({ length: pending }).map((_, i) => (
+        <RecipeCardSkeleton key={`skeleton-${i}`} />
+      ))}
+    </div>
   );
 }
 
