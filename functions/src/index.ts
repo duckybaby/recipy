@@ -120,7 +120,16 @@ app.post(
     });
 
     // 3) Parse and validate every recipe; drop ones that fail.
-    const raw = parseJsonLoose<unknown[]>(text);
+    // If the model truncated its JSON output (max_tokens hit), parseJsonLoose
+    // throws. We catch and return empty so the user sees the friendly empty
+    // state rather than a "Unterminated string" error.
+    let raw: unknown;
+    try {
+      raw = parseJsonLoose<unknown[]>(text);
+    } catch (err) {
+      console.warn("search: JSON parse failed", err, "first 500 chars:", text.slice(0, 500));
+      return res.json({ recipes: [] });
+    }
     if (!Array.isArray(raw)) {
       return res.json({ recipes: [] });
     }
