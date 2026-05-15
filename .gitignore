@@ -25,6 +25,10 @@ dist-ssr
 functions/lib/
 functions/node_modules/
 
+# Firebase CLI agent-skills (dev-machine tooling, not part of the app)
+.agents/
+skills-lock.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
