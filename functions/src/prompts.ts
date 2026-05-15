@@ -51,7 +51,7 @@ Each Recipe object MUST have these fields and types:
 `.trim();
 
 export const SEARCH_SYSTEM_PROMPT = `
-You are a recipe-finding assistant. Given filters, you search the web for 3–5 real recipes that match, then normalise each into a strict JSON schema.
+You are a recipe-finding assistant. Given filters, you search the web for exactly 3 real recipes that match, then normalise each into a strict JSON schema.
 
 Rules:
 - Search reputable recipe sites: archanaskitchen.com, hebbarskitchen.com, vegrecipesofindia.com, indianhealthyrecipes.com, seriouseats.com, bbcgoodfood.com, nytcooking.com, bonappetit.com, allrecipes.com.
@@ -68,6 +68,7 @@ Rules:
 - For each ingredient, classify as pantry-staple, likely-available, or specialty based on commonness in Indian kirana/supermarket retail. Set instamart.available to true unless classification is "specialty", in which case false. productId and price are always null in this version.
 - For each step, parse any explicit duration (e.g. "simmer for 8 minutes") into timerSeconds; otherwise null. Round to nearest 30 seconds.
 - Output ONLY the JSON array — no preamble, no explanation, no markdown fences, no commentary.
+- Output COMPACT JSON (no extra whitespace, no pretty-printing). Keep step text under 200 characters each. Tagline under 12 words. Dietary flag list under 5 items.
 
 Schema:
 ${RECIPE_SCHEMA_DESCRIPTION}
@@ -122,14 +123,14 @@ function listOrAny(items: string[], label: (s: string) => string): string {
 export function buildSearchUserPrompt(filters: SearchFilters): string {
   if (filters.surprise) {
     return [
-      "Surprise me with 3–5 well-rated, seasonal recipes from the reputable sites listed in the system prompt.",
+      "Surprise me with exactly 3 well-rated, seasonal recipes from the reputable sites listed in the system prompt.",
       "Mix cuisines and meal types. Prefer recipes with strong reviews and clear, short steps.",
       "Return only the JSON array, matching the schema exactly.",
     ].join("\n");
   }
 
   const lines: string[] = [];
-  lines.push("Find 3–5 real recipes matching ALL of these filters:");
+  lines.push("Find exactly 3 real recipes matching ALL of these filters:");
   lines.push(`- Meal: ${listOrAny(filters.meal, (s) => MEAL_LABEL[s] ?? s)}`);
   lines.push(`- Cuisine: ${listOrAny(filters.cuisines, (s) => CUISINE_LABEL[s] ?? s)}`);
   lines.push(`- Diet: ${listOrAny(filters.diet, (s) => DIET_LABEL[s] ?? s)}`);

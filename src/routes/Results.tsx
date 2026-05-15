@@ -56,12 +56,18 @@ export default function Results() {
         setState({ kind: "ok", recipes });
       } catch (err) {
         if (cancelled) return;
-        const message =
+        const raw =
           err instanceof ApiError
             ? err.message
             : err instanceof Error
               ? err.message
-              : "Something went wrong";
+              : null;
+        // Empty-string messages would render a blank line under the
+        // "Couldn't load recipes" header. Fall back to something useful.
+        const message =
+          raw && raw.trim().length > 0
+            ? raw
+            : "The recipe service is misbehaving. Try again in a moment.";
         setState({ kind: "error", message });
       }
     })();

@@ -7,9 +7,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-sonnet-4-6";
-// 8192 ≈ 32K chars of output JSON — plenty for 3-5 full recipes per §9.
-// 4096 was truncating responses mid-string around char ~12.5K.
-const MAX_TOKENS = 8192;
+// Recipe payloads run ~5-8K chars each; 3 recipes ≈ 18-25K chars ≈ 5-7K
+// output tokens. 16384 gives plenty of headroom. 8192 was still truncating.
+// (Tier 1 OTPM is 8K but Claude uses only what it needs — this is a ceiling.)
+const MAX_TOKENS = 16384;
 
 let cachedClient: Anthropic | null = null;
 let cachedKey: string | null = null;
