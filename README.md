@@ -12,7 +12,7 @@ See [`docs/spec.md`](./docs/spec.md) for the full v1 spec.
 - **Routing:** `react-router-dom` v7
 - **Icons:** `lucide-react`
 - **Backend:** Firebase Cloud Functions (Node 20, 2nd gen) — wired in M2
-- **Hosting:** Firebase Hosting — wired in M2
+- **Hosting:** Firebase Hosting (project `recipy-63422`) — auto-deploy on push to `main`
 - **Secrets:** Firebase Secret Manager (`ANTHROPIC_API_KEY`)
 
 ## Quick start
@@ -29,11 +29,11 @@ npm run preview      # preview the production build locally
 | # | Milestone | Status |
 |---|---|---|
 | M0 | Bootstrap: Vite + Tailwind v4 + PWA scaffold + folder structure | ✅ |
-| M1 | Form → Results → Recipe (mocked data) | next |
-| M2 | Wire Claude + Cloud Function | |
+| M1 | Form → Results → Recipe (mocked data) + hardened design tokens | ✅ |
+| M2 | Wire Claude + Cloud Function | next |
 | M3 | Cooking mode + persistence + wake lock + timer alert | |
 | M4 | Instamart (Path B heuristic) | |
-| M5 | Polish + acceptance criteria + deploy | |
+| M5 | Polish + acceptance criteria + custom domain | |
 
 ## Folder layout (spec §13)
 

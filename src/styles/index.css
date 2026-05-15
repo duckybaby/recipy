@@ -1,20 +1,80 @@
 @import "tailwindcss";
 
-/* ---------- Design tokens (spec §10) ---------- */
+/* ============================================================
+   Design tokens — the single dial for re-skinning the app.
+   To swap the look (e.g. apply the typeui-brutalism skill),
+   change values in this @theme block and the component
+   primitives in @layer components below. Components reference
+   these tokens via Tailwind utilities and never use raw
+   `slate-500` / `text-[12.5px]` / `rounded-[14px]` etc.
+   ============================================================ */
 @theme {
+  /* ---- Type scale (spec §10) ---- */
+  --text-meta: 11px;        /* tiny meta: skeleton, step counter */
+  --text-caption: 12px;     /* card meta, sheet rows */
+  --text-body: 12.5px;      /* default body */
+  --text-strong: 13px;      /* button text, link text */
+  --text-step: 14px;        /* cooking-mode step text */
+  --text-section: 15px;     /* section titles */
+  --text-title: 17px;       /* page titles */
+
+  /* ---- Fonts ---- */
   --font-sans:
     "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Ink is the near-black used on primary buttons (spec §10) */
-  --color-ink: #1a1a1a;
+  /* ---- Brand neutrals ----
+     "Ink" is the deep neutral: primary text + primary button bg.
+     "Paper" is the light neutral: page bg + cards.
+     A re-skin (e.g. brutalism) typically swaps these two and
+     intensifies the line color. */
+  --color-ink: #0f172a;
+  --color-ink-muted: #64748b;
+  --color-ink-faint: #94a3b8;
+  --color-ink-disabled: #cbd5e1;
 
-  /* Warm paper bg (subtle, not pure white) — kitchen-book feel */
   --color-paper: #ffffff;
+  --color-paper-soft: #f1f5f9; /* image placeholders, skeleton, step bubble */
+
+  --color-line: #e2e8f0; /* default card / chip borders */
+  --color-line-soft: #f1f5f9; /* subtle dividers between ingredients */
+
+  --color-overlay: rgba(0, 0, 0, 0.4); /* modal backdrop */
+
+  /* ---- Semantic — Success (ingredient available, cook complete) ---- */
+  --color-success-50: #ecfdf5;
+  --color-success-300: #a7f3d0;
+  --color-success-500: #10b981;
+  --color-success-700: #047857;
+
+  /* ---- Semantic — Warning (missing ingredient, make-ahead nudge) ---- */
+  --color-warning-50: #fffbeb;
+  --color-warning-300: #fde68a;
+  --color-warning-500: #f59e0b;
+  --color-warning-700: #b45309;
+  --color-warning-800: #92400e;
+
+  /* ---- Missing-ingredient dot (visually distinct from amber warning bg) ---- */
+  --color-missing: #f97316;
+
+  /* ---- Semantic — Info (selected chips) ---- */
+  --color-info-50: #eff6ff;
+  --color-info-300: #93c5fd;
+  --color-info-700: #1d4ed8;
+
+  /* ---- Radii ----
+     `rounded-pill` is dialed via this token so a re-skin that
+     wants sharper chips (brutalism) just sets it to 0 or 4. */
+  --radius-button: 8px;
+  --radius-card: 14px;
+  --radius-sheet: 22px;
+  --radius-pill: 9999px;
 }
 
-/* ---------- Global base ---------- */
+/* ============================================================
+   Global base
+   ============================================================ */
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
@@ -25,13 +85,11 @@
     overscroll-behavior-y: none;
   }
   body {
-    @apply bg-paper text-slate-900 font-sans;
-    font-size: 12.5px;
+    @apply bg-paper text-ink font-sans text-body;
     line-height: 1.5;
     margin: 0;
     min-height: 100svh;
   }
-  /* Disable default form styles we don't want */
   button {
     @apply select-none;
     background: none;
@@ -47,45 +105,48 @@
   }
 }
 
-/* ---------- Component primitives ---------- */
+/* ============================================================
+   Component primitives — change these to re-shape chips, pills,
+   buttons across the app in one place.
+   ============================================================ */
 @layer components {
-  /* Chip — used in the form (spec §3). 44px minimum tap target. */
+  /* Chip (Form, spec §3) — 44px min tap target */
   .chip {
-    @apply inline-flex items-center justify-center rounded-full border
-      text-[13px] leading-none transition-colors;
+    @apply inline-flex items-center justify-center rounded-pill border
+      text-strong leading-none transition-colors;
     padding: 0 14px;
     min-height: 44px;
   }
   .chip-unselected {
-    @apply bg-white border-slate-200 text-slate-900;
+    @apply bg-paper border-line text-ink;
   }
   .chip-selected {
-    @apply bg-blue-50 border-blue-300 text-blue-700;
+    @apply bg-info-50 border-info-300 text-info-700;
   }
 
-  /* Availability pill on cards / details */
+  /* Pill (availability badge, difficulty, diet flags) */
   .pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border text-[12px]
+    @apply inline-flex items-center gap-1.5 rounded-pill border text-caption
       leading-none;
     padding: 6px 10px;
   }
   .pill-success {
-    @apply bg-emerald-50 border-emerald-200 text-emerald-700;
+    @apply bg-success-50 border-success-300 text-success-700;
   }
   .pill-warning {
-    @apply bg-amber-50 border-amber-200 text-amber-700;
+    @apply bg-warning-50 border-warning-300 text-warning-700;
   }
   .pill-secondary {
-    @apply bg-slate-100 border-slate-200 text-slate-600;
+    @apply bg-paper-soft border-line text-ink-muted;
   }
   .pill-info {
-    @apply bg-blue-50 border-blue-200 text-blue-700;
+    @apply bg-info-50 border-info-300 text-info-700;
   }
 
-  /* Primary CTA — full width, near-black, white text */
+  /* Primary CTA — full width, dark filled */
   .btn-primary {
-    @apply w-full inline-flex items-center justify-center rounded-lg bg-ink
-      text-white text-[13px] font-medium transition-opacity;
+    @apply inline-flex w-full items-center justify-center rounded-button bg-ink
+      text-white text-strong font-medium transition-opacity;
     min-height: 48px;
     padding: 0 16px;
   }
@@ -93,25 +154,27 @@
     @apply opacity-90;
   }
   .btn-primary:disabled {
-    @apply opacity-40 cursor-not-allowed;
+    @apply cursor-not-allowed opacity-40;
   }
 
   /* Secondary outline button */
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded-lg border
-      border-slate-200 bg-white text-slate-900 text-[13px];
+    @apply inline-flex items-center justify-center rounded-button border
+      border-line bg-paper text-ink text-strong;
     min-height: 44px;
     padding: 0 12px;
   }
 
-  /* Focus ring — accessibility, no shadows per §10 */
+  /* Focus ring — accessibility (spec §10 — no shadows except focus) */
   .focus-ring:focus-visible {
     outline: 2px solid var(--color-ink);
     outline-offset: 2px;
   }
 }
 
-/* ---------- Timer flash (spec §7.11) ---------- */
+/* ============================================================
+   Animations / utilities
+   ============================================================ */
 @keyframes timer-flash {
   0%,
   100% {
@@ -125,7 +188,7 @@
   animation: timer-flash 600ms ease-out;
 }
 
-/* ---------- Safe areas (iOS notch / home indicator) ---------- */
+/* Safe areas (iOS notch / home indicator) */
 .safe-pt {
   padding-top: env(safe-area-inset-top);
 }

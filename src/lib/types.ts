@@ -118,7 +118,11 @@ export type Diet =
   | "vegan"
   | "jain";
 
-export type TimeMax = 15 | 30 | 60 | null; // null = no limit
+// 15/30/60 = explicit cap. "any" = user explicitly picked "No limit".
+// null = user didn't touch the chip group. Backend treats "any" and null
+// the same way (no time constraint); the distinction is purely UI state
+// so the "No limit" chip can render as selected.
+export type TimeMax = 15 | 30 | 60 | "any" | null;
 
 export type Vibe =
   | "comforting"
