@@ -39,4 +39,8 @@ jobs:
       - name: Deploy to Firebase
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
-        run: npx firebase-tools deploy --only hosting,functions --project recipy-63422 --non-interactive
+        # --force auto-applies the Artifact Registry cleanup policy (1-day
+        # retention of old container images) so the deploy doesn't exit 1
+        # on that non-fatal warning, which otherwise aborts the Hosting
+        # release before it finalizes.
+        run: npx firebase-tools deploy --only hosting,functions --project recipy-63422 --non-interactive --force
