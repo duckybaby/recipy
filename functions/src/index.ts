@@ -39,6 +39,7 @@ import {
 } from "./prompts";
 import { callWithWebSearch, callPlain, parseJsonLoose } from "./anthropic";
 import { readCache, writeCache, logFeedback } from "./cache";
+import { verifyAppCheck } from "./appCheck";
 
 // ----- Firebase admin (lazy init for emulator + production) -----
 if (getApps().length === 0) initializeApp();
@@ -76,6 +77,11 @@ app.use((req, _res, next) => {
   console.log(`${req.method} ${req.path}`);
   next();
 });
+
+// App Check verification — rejects requests without a valid token from our
+// real web app. Must run after CORS (so preflight succeeds) and before any
+// route handler. The middleware self-skips OPTIONS and /api/health.
+app.use(verifyAppCheck);
 
 // Async handler wrapper so thrown errors land in our error middleware.
 function asyncHandler(

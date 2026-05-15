@@ -2,8 +2,13 @@
 // In v1, all endpoints live under /api/* via Firebase Hosting rewrites.
 // In dev (vite), API URL is configurable via VITE_API_BASE; defaults to
 // the Firebase emulator URL once we wire it up in M2.
+//
+// Every request attaches an X-Firebase-AppCheck token so the function
+// can verify it came from our real web app (see src/lib/firebase.ts and
+// functions/src/appCheck.ts).
 
 import type { Recipe, SearchFilters, Ingredient } from "./types";
+import { getAppCheckToken } from "./firebase";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -21,9 +26,15 @@ async function post<TBody, TResponse>(
   path: string,
   body: TBody,
 ): Promise<TResponse> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const appCheckToken = await getAppCheckToken();
+  if (appCheckToken) headers["X-Firebase-AppCheck"] = appCheckToken;
+
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
