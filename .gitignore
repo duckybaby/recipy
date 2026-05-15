@@ -39,3 +39,6 @@ skills-lock.json
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code preview tool config
+.claude/

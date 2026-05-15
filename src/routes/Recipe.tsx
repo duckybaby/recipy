@@ -266,7 +266,7 @@ export default function Recipe() {
         </a>
 
         {/* 3. Title */}
-        <h1 className="mt-3 text-title font-medium leading-snug text-ink">
+        <h1 className="mt-3 text-title font-bold tracking-tight leading-snug text-ink">
           {recipe.title}
         </h1>
 
@@ -311,7 +311,7 @@ export default function Recipe() {
 
         {/* 8. Make-ahead nudge */}
         {recipe.makeAhead && !makeAheadDismissed && (
-          <div className="mt-5 rounded-button border border-warning-300 bg-warning-50 p-3">
+          <div className="card mt-5 bg-warning-50 p-3">
             <p className="text-body text-warning-800">{recipe.makeAhead}</p>
             <button
               type="button"
@@ -324,7 +324,7 @@ export default function Recipe() {
         )}
 
         {/* 9. Metrics row */}
-        <dl className="mt-6 grid grid-cols-4 gap-2 rounded-xl border border-line bg-paper px-3 py-3 text-center">
+        <dl className="card mt-6 grid grid-cols-4 gap-2 px-3 py-3 text-center">
           <Metric icon={<Clock size={14} />} label="Prep">
             {recipe.times.prepMinutes}m
           </Metric>
@@ -340,7 +340,7 @@ export default function Recipe() {
         {/* 10. Ingredients section */}
         <section className="mt-7">
           <header className="flex items-center justify-between">
-            <h2 className="text-section font-medium text-ink">
+            <h2 className="text-section font-bold text-ink">
               Ingredients
             </h2>
             <ServingsAdjuster servings={servings} onChange={setServings} />
@@ -352,7 +352,7 @@ export default function Recipe() {
             <button
               type="button"
               onClick={onReviewInstamart}
-              className="focus-ring mt-3 inline-flex w-full items-center justify-center gap-2 rounded-button border border-warning-300 bg-warning-50 px-4 py-3 text-strong font-medium text-warning-800"
+              className="btn-outline focus-ring mt-3 w-full gap-2 bg-warning-50 text-warning-800"
             >
               <ShoppingCart size={14} aria-hidden />
               Review {missingCount} missing on Instamart
@@ -362,8 +362,8 @@ export default function Recipe() {
 
         {/* Substitutions panel (toggled from secondary actions row) */}
         {(substitutionsLoading || substitutions) && (
-          <section className="mt-5 rounded-button border border-line bg-paper-soft p-4">
-            <h3 className="text-section font-medium text-ink">Substitutions</h3>
+          <section className="card mt-5 bg-paper-soft p-4">
+            <h3 className="text-section font-bold text-ink">Substitutions</h3>
             {substitutionsLoading ? (
               <p className="mt-2 text-body text-ink-muted">Asking Claude…</p>
             ) : substitutions && Object.keys(substitutions).length === 0 ? (
@@ -397,7 +397,7 @@ export default function Recipe() {
 
         {/* 12. Steps preview */}
         <section className="mt-7">
-          <h2 className="text-section font-medium text-ink">
+          <h2 className="text-section font-bold text-ink">
             Steps · {recipe.steps.length} in total
           </h2>
           <ol className="mt-3 space-y-3">
@@ -481,7 +481,7 @@ export default function Recipe() {
           aria-live="polite"
           className="safe-pb fixed inset-x-0 bottom-4 z-50 mx-auto max-w-md px-5"
         >
-          <div className="mx-auto rounded-button bg-ink px-3 py-2 text-center text-caption text-white shadow-lg">
+          <div className="mx-auto inline-block border-[2.5px] border-ink bg-ink px-3 py-2 text-center text-caption font-medium text-paper shadow-brutal-sm">
             {toast}
           </div>
         </div>

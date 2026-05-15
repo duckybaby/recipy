@@ -102,7 +102,9 @@ export default function Form() {
   return (
     <main className="mx-auto max-w-md px-5 pt-8 pb-12 safe-pt safe-pb">
       <header className="mb-8">
-        <h1 className="text-title font-medium">What are we cooking?</h1>
+        <h1 className="text-title font-bold tracking-tight">
+          What are we cooking?
+        </h1>
         <p className="mt-1.5 text-body text-ink-muted">
           Pick what you feel like — or skip everything and tap "Surprise me".
         </p>

@@ -9,8 +9,14 @@
 
 import type { Recipe, SearchFilters, Ingredient } from "./types";
 import { getAppCheckToken } from "./firebase";
+import { mockApi } from "./mockApi";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+
+// Local-dev mock dispatch. Set VITE_USE_MOCKS=true in .env.local to
+// short-circuit every endpoint to canned data — keeps Anthropic credits
+// untouched while iterating on UI.
+const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === "true";
 
 class ApiError extends Error {
   code: string;
@@ -140,7 +146,7 @@ async function searchRecipesStream(
 
 // ----- Endpoint clients -----
 
-export const api = {
+const realApi = {
   searchRecipes: searchRecipesStream,
 
   findAlternateSource: (dish: string, excludeUrls: string[]) =>
@@ -184,5 +190,18 @@ export const api = {
       { recipeId, reason },
     ),
 };
+
+// Dispatch: mocks for local dev, real fetch for prod/dev-against-prod.
+// Both objects expose the same shape — typescript enforces the contract.
+export const api = USE_MOCKS ? mockApi : realApi;
+
+if (USE_MOCKS) {
+  // Loud banner so we don't accidentally ship with mocks on.
+  // eslint-disable-next-line no-console
+  console.warn(
+    "%c[recipy] Using MOCK api (.env.local has VITE_USE_MOCKS=true)",
+    "background:#FFEB3B;color:#000;padding:2px 6px;font-weight:700",
+  );
+}
 
 export { ApiError };

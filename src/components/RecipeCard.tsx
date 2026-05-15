@@ -33,7 +33,7 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
     <Link
       to={`/recipe/${recipe.id}`}
       state={{ recipe }}
-      className="focus-ring block overflow-hidden rounded-card border border-line bg-paper transition-shadow active:shadow-sm"
+      className="focus-ring card card-interactive block overflow-hidden"
     >
       {/* Image — neutral fallback when source has no image (spec §4) */}
       <div className="h-[140px] w-full bg-paper-soft">
@@ -47,8 +47,8 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
         )}
       </div>
 
-      <div className="p-4">
-        <h3 className="text-section font-medium leading-tight text-ink">
+      <div className="border-t-[2.5px] border-ink p-4">
+        <h3 className="text-section font-bold leading-tight text-ink">
           {recipe.title}
         </h3>
 
@@ -71,9 +71,9 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
 
 export function RecipeCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-card border border-line bg-paper">
+    <div className="card overflow-hidden">
       <div className="h-[140px] w-full animate-pulse bg-paper-soft" />
-      <div className="p-4">
+      <div className="border-t-[2.5px] border-ink p-4">
         <div className="h-4 w-3/4 animate-pulse rounded bg-paper-soft" />
         <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-paper-soft" />
         <div className="mt-1 h-3 w-2/5 animate-pulse rounded bg-paper-soft" />

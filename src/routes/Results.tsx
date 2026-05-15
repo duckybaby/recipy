@@ -232,7 +232,7 @@ function StreamingList({
 function EmptyState({ onBack }: { onBack: () => void }) {
   return (
     <div className="mt-12 flex flex-col items-center text-center">
-      <h2 className="text-section font-medium text-ink">
+      <h2 className="text-section font-bold text-ink">
         Nothing great came back
       </h2>
       <p className="mt-2 text-body text-ink-muted">
@@ -260,7 +260,7 @@ function ErrorState({
 }) {
   return (
     <div className="mt-12 flex flex-col items-center text-center">
-      <h2 className="text-section font-medium text-ink">
+      <h2 className="text-section font-bold text-ink">
         Couldn't load recipes
       </h2>
       <p className="mt-2 text-body text-ink-muted">{message}</p>

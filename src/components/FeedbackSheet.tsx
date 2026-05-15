@@ -49,10 +49,10 @@ export function FeedbackSheet({ open, onClose, onSelect }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="Something looks wrong"
-        className="safe-pb absolute inset-x-0 bottom-0 rounded-t-sheet border-t border-line bg-paper pb-2"
+        className="safe-pb absolute inset-x-0 bottom-0 border-t-[3px] border-ink bg-paper pb-2"
       >
         <header className="flex items-center justify-between px-5 pt-4 pb-2">
-          <h2 className="text-section font-medium text-ink">
+          <h2 className="text-section font-bold text-ink">
             Something looks wrong?
           </h2>
           <button

@@ -24,7 +24,7 @@ export function ServingsAdjuster({ servings, onChange }: Props) {
   return (
     <div className="inline-flex items-center gap-2">
       <span className="text-body text-ink-muted">Serves</span>
-      <div className="inline-flex items-center rounded-full border border-line bg-paper">
+      <div className="inline-flex items-center rounded-full border-[2.5px] border-ink bg-paper shadow-brutal-sm">
         <button
           type="button"
           onClick={dec}
