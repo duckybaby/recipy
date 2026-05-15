@@ -32,8 +32,10 @@ export async function callWithWebSearch(opts: {
     max_tokens: MAX_TOKENS,
     // The web_search tool is a server-side tool — the model invokes it and
     // we get the final assistant text once it has finished its tool loop.
+    // max_uses=3 keeps total input tokens (system + tool results) under
+    // ~25K so we don't hit Anthropic Tier 1 rate limit (30K ITPM).
     tools: [
-      { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+      { type: "web_search_20250305", name: "web_search", max_uses: 3 },
     ] as unknown as Anthropic.Tool[], // SDK types lag the server-tool schema
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],
