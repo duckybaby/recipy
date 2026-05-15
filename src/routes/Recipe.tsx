@@ -1,13 +1,17 @@
 // Screen 3 — Recipe detail — spec §5.
 //
-// M1: loads from MOCK_RECIPES by URL param. Most sections are live (servings
-// adjuster scales quantities; make-ahead nudge dismisses; feedback sheet
-// opens). The recovery flows behind the sheet and the lateral actions
-// ("More like this" / "Substitutions" / "Different recipe") are stubbed —
-// they no-op visibly until M2 wires backend endpoints.
+// Lookup chain (spec §7.9): router location.state.recipe (from card click)
+// → active-recipe localStorage (if id matches) → recent-recipes by id
+// → last-search by id → "not found" card with a way back.
+//
+// Lateral actions wired against /api/* in M2:
+//   - More like this  → searchRecipes with similarTo flag, then navigate to /results
+//   - Substitutions   → inline panel, getSubstitutions
+//   - Different recipe → findAlternateSource, swap in place
+//   - Feedback sheet  → recompute / re-fetch flows + feedback log
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Clock,
@@ -17,7 +21,6 @@ import {
   ShoppingCart,
   Users,
 } from "lucide-react";
-import { findMockRecipe } from "../lib/mockRecipes";
 import { IngredientRow } from "../components/IngredientRow";
 import { ServingsAdjuster } from "../components/ServingsAdjuster";
 import {
@@ -27,9 +30,14 @@ import {
 import {
   pushRecentRecipe,
   setActiveRecipe,
+  getActiveRecipe,
+  getRecentRecipes,
+  getLastSearch,
   dismissMakeahead,
   getDismissedMakeahead,
 } from "../lib/storage";
+import { api, ApiError } from "../lib/api";
+import { encodeFilters, decodeFilters } from "../lib/filterEncoding";
 import { scaleAndFormat, scaleQuantity, formatQuantity } from "../lib/scaling";
 import type { Recipe as RecipeT } from "../lib/types";
 
@@ -38,21 +46,45 @@ function sentence(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Find a recipe by id across all client-side caches. */
+function lookupRecipe(id: string, fromState: RecipeT | null): RecipeT | null {
+  if (fromState && fromState.id === id) return fromState;
+  const active = getActiveRecipe();
+  if (active?.recipe.id === id) return active.recipe;
+  const recent = getRecentRecipes().find((r) => r.id === id);
+  if (recent) return recent;
+  const last = getLastSearch()?.recipes.find((r) => r.id === id);
+  if (last) return last;
+  // As a fallback, if state has any recipe (even mismatched id from a stale
+  // link), prefer it over showing not-found — better UX during dev.
+  return fromState;
+}
+
 export default function Recipe() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [params] = useSearchParams();
 
-  const recipe = useMemo(() => findMockRecipe(id), [id]);
+  // Initial lookup. We hold the recipe in state so "Different recipe" can
+  // swap it in place without unmounting.
+  const initialRecipe = useMemo(() => {
+    const stateRecipe = (location.state as { recipe?: RecipeT } | null)?.recipe ?? null;
+    return lookupRecipe(id, stateRecipe);
+  }, [id, location.state]);
+
+  const [recipe, setRecipe] = useState<RecipeT | null>(initialRecipe);
   const [servings, setServings] = useState<number>(
-    recipe?.servings.base ?? 2,
+    initialRecipe?.servings.base ?? 2,
   );
   const [sheetOpen, setSheetOpen] = useState(false);
   const [makeAheadDismissed, setMakeAheadDismissed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [substitutions, setSubstitutions] = useState<Record<string, string[]> | null>(null);
+  const [substitutionsLoading, setSubstitutionsLoading] = useState(false);
+  const [actionBusy, setActionBusy] = useState<null | "more" | "different">(null);
 
-  // Side effects on mount: persist as active recipe + push to recent
-  // (spec §7.9). Also check dismissed-makeahead state.
+  // Persist as active recipe + push to recent (spec §7.9).
   useEffect(() => {
     if (!recipe) return;
     setActiveRecipe({
@@ -62,6 +94,10 @@ export default function Recipe() {
     });
     pushRecentRecipe(recipe);
     setMakeAheadDismissed(getDismissedMakeahead().includes(recipe.id));
+    // Reset substitutions panel when recipe changes (e.g. "Different recipe" swap).
+    setSubstitutions(null);
+    // Reset servings to base when the recipe swaps to a different dish.
+    setServings(recipe.servings.base);
   }, [recipe]);
 
   if (!recipe) {
@@ -82,22 +118,111 @@ export default function Recipe() {
   );
   const missingCount = missingIngredients.length;
 
-  const stubToast = (msg: string) => {
+  const showToast = (msg: string) => {
     setToast(msg);
-    window.setTimeout(() => setToast(null), 2500);
+    window.setTimeout(() => setToast(null), 2800);
   };
 
-  const onFeedbackSelect = (reason: FeedbackReason) => {
+  // ---------- Lateral actions ----------
+
+  const onMoreLikeThis = async () => {
+    if (actionBusy) return;
+    setActionBusy("more");
+    try {
+      const baseFilters = decodeFilters(params);
+      const q = encodeFilters(baseFilters);
+      q.set("similarTo", recipe.title);
+      navigate({ pathname: "/results", search: q.toString() });
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const onSubstitutions = async () => {
+    if (substitutions) {
+      // Toggle panel closed.
+      setSubstitutions(null);
+      return;
+    }
+    setSubstitutionsLoading(true);
+    try {
+      const { substitutions: subs } = await api.getSubstitutions(recipe.ingredients);
+      setSubstitutions(subs);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't load substitutions.");
+    } finally {
+      setSubstitutionsLoading(false);
+    }
+  };
+
+  const onDifferentRecipe = async () => {
+    if (actionBusy) return;
+    setActionBusy("different");
+    try {
+      const { recipe: alt } = await api.findAlternateSource(recipe.title, [
+        recipe.source.url,
+      ]);
+      setRecipe(alt);
+      showToast("Found another version of this dish.");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "No alternate source found.");
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  // ---------- Feedback sheet recovery flows (spec §5.2) ----------
+
+  const onFeedbackSelect = async (reason: FeedbackReason) => {
     setSheetOpen(false);
-    // M1: recovery flows are M2 work.
-    stubToast(`"${reason}" — recovery wired in M2.`);
+    // Fire-and-forget log (spec §11.4).
+    void api.feedback(recipe.id, reason).catch(() => undefined);
+
+    switch (reason) {
+      case "steps-dont-match":
+      case "ingredients-wrong":
+        await onDifferentRecipe();
+        break;
+      case "calories-off": {
+        try {
+          const { value } = await api.recomputeField(recipe, "calories");
+          setRecipe({
+            ...recipe,
+            calories: { perServing: value, inferenceSource: "estimated" },
+          });
+          showToast(`Updated calories to ${value} kcal.`);
+        } catch (err) {
+          showToast(err instanceof ApiError ? err.message : "Recompute failed.");
+        }
+        break;
+      }
+      case "time-off": {
+        try {
+          const { value } = await api.recomputeField(recipe, "time");
+          // Distribute updated total back into prep+cook proportionally.
+          const prevTotal = recipe.times.totalMinutes || 1;
+          const prepShare = recipe.times.prepMinutes / prevTotal;
+          const newPrep = Math.max(0, Math.round(value * prepShare));
+          const newCook = Math.max(0, value - newPrep);
+          setRecipe({
+            ...recipe,
+            times: { prepMinutes: newPrep, cookMinutes: newCook, totalMinutes: value },
+          });
+          showToast(`Updated total time to ${value} min.`);
+        } catch (err) {
+          showToast(err instanceof ApiError ? err.message : "Recompute failed.");
+        }
+        break;
+      }
+      case "not-what-i-want":
+        navigate({ pathname: "/results", search: params.toString() });
+        break;
+    }
   };
 
-  const onAddIngredient = () => stubToast("Instamart cart — wired in M4.");
-
-  const onReviewInstamart = () => stubToast("Instamart cart — wired in M4.");
-
-  const onStartCooking = () => stubToast("Cooking mode — built in M3.");
+  const onAddIngredient = () => showToast("Instamart cart — wired in M4.");
+  const onReviewInstamart = () => showToast("Instamart cart — wired in M4.");
+  const onStartCooking = () => showToast("Cooking mode — built in M3.");
 
   const onDismissMakeAhead = () => {
     dismissMakeahead(recipe.id);
@@ -105,7 +230,6 @@ export default function Recipe() {
   };
 
   // Scaled total calories don't change (calories are per serving, spec §5.1).
-  // Times don't change either.
   const back = () => navigate({ pathname: "/results", search: params.toString() });
 
   return (
@@ -123,7 +247,7 @@ export default function Recipe() {
         <button
           type="button"
           aria-label="Share"
-          onClick={() => stubToast("Share — wired post-v1.")}
+          onClick={() => showToast("Share — wired post-v1.")}
           className="focus-ring -mr-2 inline-flex h-11 w-11 items-center justify-center text-ink-muted"
         >
           <Share2 size={18} />
@@ -236,6 +360,33 @@ export default function Recipe() {
           )}
         </section>
 
+        {/* Substitutions panel (toggled from secondary actions row) */}
+        {(substitutionsLoading || substitutions) && (
+          <section className="mt-5 rounded-button border border-line bg-paper-soft p-4">
+            <h3 className="text-section font-medium text-ink">Substitutions</h3>
+            {substitutionsLoading ? (
+              <p className="mt-2 text-body text-ink-muted">Asking Claude…</p>
+            ) : substitutions && Object.keys(substitutions).length === 0 ? (
+              <p className="mt-2 text-body text-ink-muted">
+                No common substitutions came back.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {Object.entries(substitutions ?? {}).map(([name, options]) => (
+                  <li key={name}>
+                    <p className="text-strong font-medium text-ink">{name}</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5 text-body text-ink-muted">
+                      {options.map((opt, i) => (
+                        <li key={i}>{opt}</li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
         {/* 11. Pairs well with */}
         {recipe.pairsWith && recipe.pairsWith.length > 0 && (
           <p className="mt-6 text-body text-ink-muted">
@@ -282,24 +433,27 @@ export default function Recipe() {
         <div className="mt-3 grid grid-cols-3 gap-2">
           <button
             type="button"
-            className="btn-outline focus-ring text-caption"
-            onClick={() => stubToast("More like this — wired in M2.")}
+            className="btn-outline focus-ring text-caption disabled:opacity-50"
+            onClick={onMoreLikeThis}
+            disabled={actionBusy === "more"}
           >
             More like this
           </button>
           <button
             type="button"
-            className="btn-outline focus-ring text-caption"
-            onClick={() => stubToast("Substitutions — wired in M2.")}
+            className="btn-outline focus-ring text-caption disabled:opacity-50"
+            onClick={onSubstitutions}
+            disabled={substitutionsLoading}
           >
-            Substitutions
+            {substitutions ? "Hide subs" : "Substitutions"}
           </button>
           <button
             type="button"
-            className="btn-outline focus-ring text-caption"
-            onClick={() => stubToast("Different recipe — wired in M2.")}
+            className="btn-outline focus-ring text-caption disabled:opacity-50"
+            onClick={onDifferentRecipe}
+            disabled={actionBusy === "different"}
           >
-            Different recipe
+            {actionBusy === "different" ? "Searching…" : "Different recipe"}
           </button>
         </div>
 
@@ -321,7 +475,6 @@ export default function Recipe() {
         onSelect={onFeedbackSelect}
       />
 
-      {/* Stub toast — replaces alert() during M1. */}
       {toast && (
         <div
           role="status"
@@ -387,8 +540,6 @@ function IngredientList({
             {items.map((ing) => {
               const scaled = scaleQuantity(ing.quantity, base, servings);
               const display = formatQuantity(scaled, ing.unit);
-              // formatQuantity returns "a pinch" for very small tsp values,
-              // which already implies the unit. Suppress the unit in that case.
               const _unitInQty = display === "a pinch";
               return (
                 <IngredientRow

@@ -81,6 +81,7 @@ function parseTimeMax(raw: string | null): TimeMax {
 }
 
 export function decodeFilters(params: URLSearchParams): SearchFilters {
+  const similarTo = params.get("similarTo");
   return {
     meal: parseList(params.get("meal"), MEALS),
     cuisines: parseList(params.get("cuisines"), CUISINES),
@@ -89,6 +90,7 @@ export function decodeFilters(params: URLSearchParams): SearchFilters {
     vibes: parseList(params.get("vibes"), VIBES),
     mainIngredients: parseList(params.get("main"), MAIN_INGREDIENTS),
     surprise: params.get("surprise") === "true",
+    ...(similarTo ? { similarTo } : {}),
   };
 }
 
@@ -102,6 +104,7 @@ export function encodeFilters(filters: SearchFilters): URLSearchParams {
   if (filters.mainIngredients.length)
     p.set("main", filters.mainIngredients.join(","));
   if (filters.surprise) p.set("surprise", "true");
+  if (filters.similarTo) p.set("similarTo", filters.similarTo);
   return p;
 }
 
@@ -137,7 +140,7 @@ export function summarizeFilters(filters: SearchFilters): string {
 }
 
 /** Convert to the API request body shape (spec §7.2 /api/search-recipes). */
-export function toApiBody(filters: SearchFilters) {
+export function toApiBody(filters: SearchFilters): SearchFilters {
   return {
     meal: filters.meal,
     cuisines: filters.cuisines,
@@ -150,5 +153,6 @@ export function toApiBody(filters: SearchFilters) {
     vibes: filters.vibes,
     mainIngredients: filters.mainIngredients,
     surprise: filters.surprise ?? false,
+    ...(filters.similarTo ? { similarTo: filters.similarTo } : {}),
   };
 }

@@ -1,7 +1,9 @@
-# Auto-deploy to Firebase Hosting on push to main.
-# Service-account secret created via `firebase init hosting:github`.
+# Auto-deploy to Firebase Hosting + Cloud Functions on push to main.
+#
+# Service-account secret created via `firebase init hosting:github` and
+# the Cloud Functions Admin role added in the GCP console.
 
-name: Deploy to Firebase Hosting on merge
+name: Deploy to Firebase on merge
 on:
   push:
     branches:
@@ -15,11 +17,26 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      # Frontend
       - run: npm ci
       - run: npm run build
-      - uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RECIPY_63422 }}
-          channelId: live
-          projectId: recipy-63422
+
+      # Cloud Functions
+      - run: npm ci
+        working-directory: functions
+      - run: npm run build
+        working-directory: functions
+
+      # Deploy both hosting + functions via the firebase CLI.
+      # We use the service account JSON (same secret as before) by
+      # writing it to a temp file and pointing GOOGLE_APPLICATION_CREDENTIALS at it.
+      - name: Write service account
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_RECIPY_63422 }}' > "$RUNNER_TEMP/sa.json"
+        shell: bash
+
+      - name: Deploy to Firebase
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx firebase-tools deploy --only hosting,functions --project recipy-63422 --non-interactive

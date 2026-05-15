@@ -32,6 +32,7 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
   return (
     <Link
       to={`/recipe/${recipe.id}`}
+      state={{ recipe }}
       className="focus-ring block overflow-hidden rounded-card border border-line bg-paper transition-shadow active:shadow-sm"
     >
       {/* Image — neutral fallback when source has no image (spec §4) */}

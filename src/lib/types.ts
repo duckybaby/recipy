@@ -152,4 +152,6 @@ export type SearchFilters = {
   vibes: Vibe[];
   mainIngredients: MainIngredient[];
   surprise?: boolean;
+  // Set by "More like this" — biases the next search toward this dish.
+  similarTo?: string;
 };
