@@ -5,6 +5,14 @@ import tailwindcss from "@tailwindcss/vite";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Pre-bundle these so the dev server doesn't hit "optimized dependencies
+  // changed. reloading" the first time a page imports them — that hot-reload
+  // mid-session leaves a stale React reference in the optimized zustand
+  // bundle and the next render throws "Invalid hook call". Listing them
+  // upfront makes Vite include them in the initial scan.
+  optimizeDeps: {
+    include: ["zustand", "zustand/middleware"],
+  },
   server: {
     host: "0.0.0.0", // expose on LAN so iPhone can test
     port: 5173,

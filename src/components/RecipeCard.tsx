@@ -8,6 +8,7 @@
 
 import { motion } from "framer-motion";
 import { Link, useNavigationType } from "react-router-dom";
+import { useStore } from "../lib/store";
 import type { Recipe } from "../lib/types";
 
 // The h3 title carries a `layoutId` matching the Recipe page's H1, so
@@ -18,14 +19,20 @@ import type { Recipe } from "../lib/types";
 // On POP-driven mounts (user just hit back from Recipe → Results), we drop
 // the layoutId so Framer doesn't run a competing reverse-morph while
 // Recipe's wrapper is sliding off to the right. The card just appears.
+//
+// Tapping the card seeds the active recipe in the store so Recipe.tsx can
+// read it synchronously on mount — avoids a one-frame "We couldn't find
+// that recipe" flash if the lookup-by-id helper races with rehydration.
 export function RecipeCard({ recipe }: { recipe: Recipe }) {
   const navType = useNavigationType();
   const enableMorph = navType !== "POP";
+  const setActiveRecipe = useStore((s) => s.setActiveRecipe);
 
   return (
     <Link
       to={`/recipe/${recipe.id}`}
       state={{ recipe }}
+      onClick={() => setActiveRecipe(recipe, "search")}
       className="focus-ring card card-interactive block rounded-card p-5"
     >
       <motion.h3

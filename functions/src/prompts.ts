@@ -21,8 +21,8 @@ Each Recipe object MUST have these fields and types:
   "servings": { "base": number, "current": number },   // both equal at first
   "times": { "prepMinutes": number, "cookMinutes": number, "totalMinutes": number },
   "difficulty": {
-    "score": 1 | 2 | 3 | 4 | 5,
-    "label": "effortless" | "weeknight easy" | "needs a bit of focus" | "weekend project" | "advanced"
+    "score": 1 | 2 | 3 | 4,
+    "label": "effortless" | "needs a bit of focus" | "weekend project" | "advanced"
   },
   "calories": { "perServing": number, "inferenceSource": "page" | "estimated" },
   "equipment": string[],                     // only NON-baseline items; [] if all baseline
@@ -54,20 +54,24 @@ export const SEARCH_SYSTEM_PROMPT = `
 You are a recipe-finding assistant. Given filters, you search the web for exactly 3 real recipes that match, then normalise each into a strict JSON schema.
 
 Rules:
-- Search reputable recipe sites: archanaskitchen.com, hebbarskitchen.com, vegrecipesofindia.com, indianhealthyrecipes.com, seriouseats.com, bbcgoodfood.com, nytcooking.com, bonappetit.com, allrecipes.com.
+- Search reputable recipe sites broadly across global cuisines. These are excellent starting points, in no preferred order: seriouseats.com, bbcgoodfood.com, nytcooking.com, bonappetit.com, allrecipes.com, food52.com, simplyrecipes.com, themediterraneandish.com, eatingwell.com, archanaskitchen.com, hebbarskitchen.com, vegrecipesofindia.com, indianhealthyrecipes.com. Pick the right source for the dish — Italian sources for pasta, Thai sources for curry, Indian sources for dal, etc. Do not default to any one regional cuisine when the user hasn't specified one.
 - Every source URL you cite must be a real page you actually retrieved via web_search during THIS call. Do not cite a URL you have not fetched. If web_search returns fewer than 3 usable sources, return fewer than 3 recipes — never invent a URL to fill the array.
 - Prefer dedicated single-recipe pages over roundup posts (e.g. "10 vegetarian breakfast ideas"). A roundup is only acceptable if it contains FULL ingredient quantities AND complete step-by-step instructions for the specific dish you're citing. If a roundup only has a paragraph summary, skip it.
 - Do NOT invent recipes. If web search returns nothing matching, return an empty array.
 - Each recipe must include a source URL that the user can open.
 - Normalise quantities to a consistent unit per ingredient.
 - Generate a one-sentence tagline (max 12 words) describing the dish.
-- Infer a difficulty score (1–5) and a friendly label ("effortless", "weeknight easy", "needs a bit of focus", "weekend project", "advanced") from step count, technique vocabulary, and total time.
+- Infer a difficulty score (1–4) with the matching label. Pick the level honestly — don't default to the middle. Definitions:
+  1 "effortless" — no real cooking (assemble, microwave, no-cook). Total time ≤15 min, single technique or none.
+  2 "needs a bit of focus" — typical home cooking. One or two techniques (sauté + simmer, bake). 20–60 min total. Common but should NOT be the default; only apply when there's actual technique to manage.
+  3 "weekend project" — multi-stage or 60+ min active time. Multiple components, requires planning, or a step that demands sustained attention (laminating, slow-braising).
+  4 "advanced" — real technique (lamination, fermentation, tempering chocolate, sourdough starter, deboning). Rare. Use only when the recipe genuinely needs experience.
 - Infer diet flags from the ingredient list: "contains dairy", "contains gluten", "vegetarian", "vegan", "eggless", "contains nuts", etc.
 - Infer equipment from the steps. Only flag equipment OUTSIDE this baseline: oven, microwave, air fryer, 4-burner stove, hand blender, regular blender, hand mixer. Mention "kadhai" and "pressure cooker" only if they're genuinely required (no good substitute). Common pots/pans/knives are never flagged.
 - Detect make-ahead steps: anything requiring more than 15 minutes of lead time before active cooking can begin (soaking, marinating, room-temp butter, dough rising). Emit one short sentence; null if not applicable.
 - Detect "pairs well with" sides if the dish is conventionally served with accompaniments. Null if standalone.
 - "whyPicked" is an array of 2-4 short tags (1-3 words each) derived from the user's active filters. Examples: ["30m", "comforting", "vegetarian"] or ["15m", "eggless", "breakfast"]. Never write full phrases like "total time under 15 minutes" or "South Indian cuisine" — those are too long. Strip filler words; surface the essence.
-- For each ingredient, classify as pantry-staple, likely-available, or specialty based on commonness in Indian kirana/supermarket retail. Set instamart.available to true unless classification is "specialty", in which case false. productId and price are always null in this version.
+- For each ingredient, classify as pantry-staple, likely-available, or specialty. This is purely a delivery-availability hint for Instamart (a major Indian grocery delivery service), NOT a hint about what cuisines to favour. Use commonness in modern urban Indian retail (chain supermarkets + neighbourhood stores) as the yardstick. Set instamart.available to true unless classification is "specialty", in which case false. productId and price are always null in this version.
 - "imageUrl" in the source object MUST always be null. The frontend does not display images in v1. Do not waste effort finding image URLs and do not invent any — just emit null.
 - For each step, parse any explicit duration (e.g. "simmer for 8 minutes") into timerSeconds; otherwise null. Round to nearest 30 seconds.
 - Output ONLY the JSON array — no preamble, no explanation, no markdown fences, no commentary.
@@ -126,8 +130,9 @@ function listOrAny(items: string[], label: (s: string) => string): string {
 export function buildSearchUserPrompt(filters: SearchFilters): string {
   if (filters.surprise) {
     return [
-      "Surprise me with exactly 3 well-rated, seasonal recipes from the reputable sites listed in the system prompt.",
-      "Mix cuisines and meal types. Prefer recipes with strong reviews and clear, short steps.",
+      "Pick exactly 3 well-rated recipes for a surprise selection.",
+      "CRITICAL: each recipe must come from a different culinary tradition. No two recipes from the same cuisine. Spread across continents — e.g. one Italian + one Thai + one Mexican, or one French + one Japanese + one Indian. Examples of distinct traditions: Italian, French, Spanish, Greek, Mexican, Peruvian, American Southern, Cajun, Middle Eastern, North African, Ethiopian, Turkish, Lebanese, North Indian, South Indian, Chinese, Japanese, Korean, Thai, Vietnamese, Indonesian. Do not return three Indian recipes.",
+      "Prefer recipes with strong reviews and clear, short steps. Mix meal types too (e.g. one main, one snack, one breakfast).",
       "Return only the JSON array, matching the schema exactly.",
     ].join("\n");
   }

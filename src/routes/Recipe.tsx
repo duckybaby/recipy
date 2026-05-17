@@ -16,7 +16,6 @@ import {
   useLocation,
   useNavigate,
   useParams,
-  useSearchParams,
 } from "react-router-dom";
 import {
   ArrowLeft,
@@ -46,13 +45,10 @@ import {
 } from "../components/ActionSheet";
 import {
   pushRecentRecipe,
-  setActiveRecipe,
-  getActiveRecipe,
   getRecentRecipes,
-  getLastSearch,
 } from "../lib/storage";
+import { findRecipeInStore, useStore } from "../lib/store";
 import { api, ApiError } from "../lib/api";
-import { encodeFilters, decodeFilters } from "../lib/filterEncoding";
 import {
   scaleAndFormat,
   scaleQuantity,
@@ -85,15 +81,15 @@ const TAB_SLIDE_VARIANTS: Variants = {
   exit: (dir: number) => ({ x: dir * -48, opacity: 0 }),
 };
 
-/** Find a recipe by id across all client-side caches. */
+/** Find a recipe by id across all client-side caches. Checks the Zustand
+ *  store first (activeRecipe + lastSearch.recipes) then falls back to the
+ *  recent-recipes list in localStorage. Direct deep links land here too. */
 function lookupRecipe(id: string, fromState: RecipeT | null): RecipeT | null {
   if (fromState && fromState.id === id) return fromState;
-  const active = getActiveRecipe();
-  if (active?.recipe.id === id) return active.recipe;
+  const fromStore = findRecipeInStore(id);
+  if (fromStore) return fromStore;
   const recent = getRecentRecipes().find((r) => r.id === id);
   if (recent) return recent;
-  const last = getLastSearch()?.recipes.find((r) => r.id === id);
-  if (last) return last;
   return fromState;
 }
 
@@ -101,7 +97,10 @@ export default function Recipe() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [params] = useSearchParams();
+  // Pull store actions once at the top so the JSX handlers stay tight. The
+  // `useStore.getState()` pattern works too — we use that for snapshot reads
+  // (filters at click time), and the hook for subscribed setters.
+  const setActiveRecipeInStore = useStore((s) => s.setActiveRecipe);
 
   const initialRecipe = useMemo(() => {
     const stateRecipe =
@@ -110,21 +109,10 @@ export default function Recipe() {
   }, [id, location.state]);
 
   const [recipe, setRecipe] = useState<RecipeT | null>(initialRecipe);
-  // The title (and the layoutId on the H1) is locked to whatever recipe
-  // we first landed on. When the user finds an alternate, only the body
-  // content swaps — the title stays the same so the page still reads as
-  // "this dish" even though the source changed. We store as refs since
-  // they're write-once at mount and we don't need re-renders on them.
-  const originalTitleRef = useRef<string | null>(initialRecipe?.title ?? null);
-  const originalRecipeIdRef = useRef<string | null>(
-    initialRecipe?.id ?? null,
-  );
-  const originalTitle = originalTitleRef.current;
-  const originalRecipeId = originalRecipeIdRef.current;
-  // The recipe we were viewing immediately before the user tapped
-  // "Find alternate". Used to render the "Alternate recipe · compare
-  // with previous" affordance.
-  const [previousRecipe, setPreviousRecipe] = useState<RecipeT | null>(null);
+  // The immediately-prior version, if any, lives on `recipe.previousVersion`
+  // (set by onDifferentRecipe). The Results card and Recipe header now show
+  // the current version's title — back-navigating to Results reflects the
+  // swap. The compare-with-previous link reads from `recipe.previousVersion`.
   const [servings, setServings] = useState<number>(
     initialRecipe?.servings.base ?? 2,
   );
@@ -260,11 +248,7 @@ export default function Recipe() {
   // under the steps so it needs to be ready before the user scrolls.
   useEffect(() => {
     if (!recipe) return;
-    setActiveRecipe({
-      recipe,
-      source: "search",
-      openedAt: new Date().toISOString(),
-    });
+    setActiveRecipeInStore(recipe, "search");
     pushRecentRecipe(recipe);
     setSubstitutions(null);
     setServings(recipe.servings.base);
@@ -314,8 +298,13 @@ export default function Recipe() {
     window.setTimeout(() => setToast(null), 2500);
   };
 
-  const back = () =>
-    navigate({ pathname: "/results", search: params.toString() });
+  // Real browser-back so Results restores its scroll position and the
+  // previous batch from the store without remounting fresh. Fallback to a
+  // PUSH to /results only when there's no history (deep link / refresh).
+  const back = () => {
+    if (location.key === "default") navigate("/results");
+    else navigate(-1);
+  };
 
   // ---------- Substitution handlers ----------
   const applySubstitute = (name: string, sub: string) =>
@@ -373,10 +362,14 @@ export default function Recipe() {
     if (actionBusy) return;
     setActionBusy("more");
     try {
-      const baseFilters = decodeFilters(params);
-      const q = encodeFilters(baseFilters);
-      q.set("similarTo", recipe.title);
-      navigate({ pathname: "/results", search: q.toString() });
+      // Bias the next search by the current dish, then push to /results
+      // with the fresh intent so the loader shows + fetch runs (or cache
+      // hits if Results saw this similarTo recently).
+      const base = useStore.getState().filters;
+      useStore
+        .getState()
+        .setFilters({ ...base, similarTo: recipe.title, surprise: false });
+      navigate("/results", { state: { intent: "fresh" } });
     } finally {
       setActionBusy(null);
     }
@@ -386,17 +379,34 @@ export default function Recipe() {
     if (actionBusy) return;
     setActionBusy("different");
     try {
+      const currentRecipe = recipe;
       const { recipe: alt } = await api.findAlternateSource(recipe.title, [
         recipe.source.url,
       ]);
-      // Hold onto the recipe we were on so the user can "compare with
-      // previous" later. The title and layoutId stay locked to whatever
-      // we first landed on — swapping only the body.
-      setPreviousRecipe(recipe);
-      setRecipe(alt);
-      // Scroll to the top so the user sees the new recipe from its
-      // beginning. Happens while the loader overlay is still showing,
-      // so the jump is hidden visually.
+      // Cap stored history at 2 versions per slot — strip the alt's own
+      // previousVersion (defensive; API never sets it) and strip the
+      // current's so the new previous never carries a grand-previous.
+      const merged: RecipeT = {
+        ...alt,
+        previousVersion: { ...currentRecipe, previousVersion: undefined },
+      };
+      setRecipe(merged);
+      // Reflect the swap in the Results list so back-nav shows the alternate
+      // in the card the user tapped from. Match by the recipe.id we were
+      // viewing, which works whether this is the first alt or a subsequent one.
+      const last = useStore.getState().lastSearch;
+      if (last) {
+        useStore.getState().setLastSearch({
+          ...last,
+          recipes: last.recipes.map((r) =>
+            r.id === currentRecipe.id ? merged : r,
+          ),
+        });
+      }
+      // Rewrite the URL to the alt's id (replace, not push) so refresh /
+      // share resolves to the new recipe and back-nav goes straight to
+      // Results, not to a /recipe/<old-id> that no longer matches the card.
+      navigate(`/recipe/${alt.id}`, { replace: true });
       window.scrollTo({ top: 0, behavior: "auto" });
       showSuccessToast("New recipe found!");
     } catch (err) {
@@ -460,7 +470,10 @@ export default function Recipe() {
         break;
       }
       case "not-what-i-want":
-        navigate({ pathname: "/results", search: params.toString() });
+        // Just take them back to results — they can pick a different card
+        // from the same batch. No fetch.
+        if (location.key === "default") navigate("/results");
+        else navigate(-1);
         break;
     }
   };
@@ -528,16 +541,15 @@ export default function Recipe() {
               <ArrowLeft size={20} />
             </button>
 
-            {/* Title fades in once the in-page title scrolls out. Locked
-                to the first-shown title so alternate-recipe swaps don't
-                change it. */}
+            {/* Title fades in once the in-page title scrolls out. Tracks
+                the currently-displayed recipe, including alt-swaps. */}
             <h2
               aria-hidden={!titleInBar}
               className={`truncate text-strong font-semibold text-ink transition-opacity duration-150 ${
                 titleInBar ? "opacity-100" : "opacity-0"
               }`}
             >
-              {originalTitle ?? recipe.title}
+              {recipe.title}
             </h2>
 
             <div className="ml-auto flex items-center">
@@ -591,10 +603,10 @@ export default function Recipe() {
                 animation, no error. */}
             <motion.h1
               ref={inPageTitleRef}
-              layoutId={`recipe-title-${originalRecipeId ?? recipe.id}`}
+              layoutId={`recipe-title-${recipe.id}`}
               className="text-title leading-tight text-ink"
             >
-              {originalTitle ?? recipe.title}
+              {recipe.title}
             </motion.h1>
 
             {/* Everything below the title fades in while the title morphs
@@ -629,10 +641,10 @@ export default function Recipe() {
               </p>
             )}
 
-            {/* Alternate-recipe affordance — shown only after the user
-                has fetched an alternate source. The link opens the
-                comparison view (built in M2). */}
-            {previousRecipe && (
+            {/* Alternate-recipe affordance — shown when the recipe carries
+                a previousVersion (set by onDifferentRecipe). The link opens
+                the comparison view (built in M2). */}
+            {recipe.previousVersion && (
               <p className="mt-4 text-caption text-ink-muted">
                 Alternate recipe ·{" "}
                 <button

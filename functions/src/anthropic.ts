@@ -48,16 +48,7 @@ export async function callWithWebSearch(opts: {
     tools: [
       { type: "web_search_20250305", name: "web_search", max_uses: 3 },
     ] as unknown as Anthropic.Tool[], // SDK types lag the server-tool schema
-    // Wrap the system prompt with `cache_control` so identical-prefix
-    // calls within 5 minutes hit Anthropic's prompt cache at $0.30/M
-    // input tokens (vs $3/M for Sonnet). Transparent to model behaviour.
-    system: [
-      {
-        type: "text",
-        text: opts.system,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
+    system: opts.system,
     messages: [{ role: "user", content: opts.user }],
   });
   return extractFinalText(response);
@@ -84,15 +75,7 @@ export async function* streamWithWebSearch(opts: {
     tools: [
       { type: "web_search_20250305", name: "web_search", max_uses: 3 },
     ] as unknown as Anthropic.Tool[],
-    // Same cache_control on the streaming variant — most hits will land
-    // here since `/api/search-recipes` is the dominant call path.
-    system: [
-      {
-        type: "text",
-        text: opts.system,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
+    system: opts.system,
     messages: [{ role: "user", content: opts.user }],
   });
 
@@ -116,15 +99,7 @@ export async function callPlain(opts: {
   const response = await client.messages.create({
     model: PLAIN_MODEL,
     max_tokens: 1024,
-    // Same caching for recompute + substitutions. System prompts are
-    // shorter here so savings are tiny, but the change is free.
-    system: [
-      {
-        type: "text",
-        text: opts.system,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
+    system: opts.system,
     messages: [{ role: "user", content: opts.user }],
   });
   return extractFinalText(response);

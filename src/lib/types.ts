@@ -21,10 +21,9 @@ export type Recipe = {
     totalMinutes: number;
   };
   difficulty: {
-    score: 1 | 2 | 3 | 4 | 5;
+    score: 1 | 2 | 3 | 4;
     label:
       | "effortless"
-      | "weeknight easy"
       | "needs a bit of focus"
       | "weekend project"
       | "advanced";
@@ -40,6 +39,12 @@ export type Recipe = {
   whyPicked: string[];
   ingredients: Ingredient[];
   steps: Step[];
+  // Set when the user found an alternate source for this dish. Holds the
+  // single immediately-prior version so the M2 compare view has both.
+  // Capped at one level deep — when a second alt-swap happens, the
+  // *grand*-previous is dropped (we keep at most 2 versions per slot).
+  // Always omitted from API responses; populated client-side only.
+  previousVersion?: Recipe;
 };
 
 export type Ingredient = {

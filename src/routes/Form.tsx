@@ -1,12 +1,19 @@
 // Screen 1 — Form ("What are we cooking?") — spec §3.
 //
-// Filters live in URL search params so back navigation from Results
-// preserves selections without local state. Custom chips per section
-// persist in localStorage (see lib/storage.ts).
+// Filters live in the Zustand store (lib/store.ts). Form reads them on
+// mount and writes back through patchFilters. Custom chips per section
+// still persist in localStorage (see lib/storage.ts).
+//
+// Two ways out of this screen:
+//   • "Find recipes" → navigate("/results", { state: { intent: "fresh" } })
+//     The intent tells Results to show the loader and fetch even if the
+//     filters happen to match a recent cached result.
+//   • "Surprise me" → resets filters to { surprise: true } first so the
+//     resulting search doesn't carry stale chip selections. Same intent.
 
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ChipGroup } from "../components/ChipGroup";
-import { decodeFilters, encodeFilters } from "../lib/filterEncoding";
+import { EMPTY_FILTERS, useStore } from "../lib/store";
 import type {
   SearchFilters,
   Meal,
@@ -82,23 +89,34 @@ const MAIN_OPTIONS: { value: MainIngredient; label: string }[] = [
 ];
 
 export default function Form() {
-  const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
-  const filters = decodeFilters(params);
+  const filters = useStore((s) => s.filters);
+  const patchFilters = useStore((s) => s.patchFilters);
+  const setFilters = useStore((s) => s.setFilters);
 
-  // Update one slice of filters, persist to URL.
+  // Update one slice of filters in the store. Any chip change also clears
+  // the surprise flag — once the user starts picking chips, they aren't in
+  // "surprise me" mode any more, so an accidental Find Recipes shouldn't
+  // come back as a surprise search.
   const update = (patch: Partial<SearchFilters>) => {
-    const next: SearchFilters = { ...filters, ...patch };
-    setParams(encodeFilters(next), { replace: true });
+    patchFilters({ ...patch, surprise: false });
   };
 
   const findRecipes = () => {
-    navigate({ pathname: "/results", search: encodeFilters(filters).toString() });
+    // Force surprise off — see above. If the user previously tapped
+    // surprise-me and then changed chips, we want a regular search now.
+    if (filters.surprise) {
+      setFilters({ ...filters, surprise: false });
+    }
+    navigate("/results", { state: { intent: "fresh" } });
   };
 
   const surpriseMe = () => {
-    const p = new URLSearchParams({ surprise: "true" });
-    navigate({ pathname: "/results", search: p.toString() });
+    // Surprise resets every chip so the API call doesn't accidentally
+    // narrow the search. The Form chips clear on next visit too — that's
+    // intentional, surprise is a one-shot mood.
+    setFilters({ ...EMPTY_FILTERS, surprise: true });
+    navigate("/results", { state: { intent: "fresh" } });
   };
 
   // Each single-select group's currently-selected value (length 0 or 1).

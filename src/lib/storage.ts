@@ -1,14 +1,23 @@
 // localStorage adapter (spec §7.9).
 //
+// Holds the bits of state that don't live in the Zustand store (see
+// lib/store.ts):
+//   • cooking state          — owned by Cooking screen, M3
+//   • recent recipes         — global history list
+//   • dismissed make-ahead   — per-recipe nudges
+//   • notifications prompt   — onboarding flag
+//   • custom chips           — Form's user-added options
+//
+// `lastSearch` and `activeRecipe` moved into the Zustand store — keeping
+// them here as parallel state was the source of the cache/URL bugs.
+//
 // All access goes through this module so v2 can swap in a Firestore-backed
 // implementation without touching call sites. Every operation is wrapped in
 // try/catch — iOS Safari private mode throws on setItem, and the app must
 // degrade gracefully to in-memory rather than crash.
 
 import type {
-  ActiveRecipe,
   CookingState,
-  LastSearch,
   NotificationsPrompt,
   Recipe,
 } from "./types";
@@ -20,11 +29,17 @@ const PREFIX = "recipe-app:";
 // number; mismatch → wipe every `${PREFIX}*` key once, so the user doesn't
 // have to clear Safari storage by hand.
 //
+// v5: dropped "weeknight easy" from the difficulty enum (now 4 levels).
+//   Old recipes carry the retired label; wipe so the UI doesn't render
+//   ghosts the type system no longer admits.
+// v4: M2.1 store refactor — `last-search` and `active-recipe` moved into
+//   the Zustand store (recipy-store key). Old keys still exist on devices
+//   that ran v3; wipe them now so we don't carry phantom state.
 // v3: forced reset after M2 polish ship — stale cached search results
 //   from earlier dev iterations were causing odd back-navigation refetches
-//   on real devices. Cleanest fix is a single wipe for everyone.
+//   on real devices.
 // v2: equipment lists got richer when we shipped HugeIcons.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 5;
 const VERSION_KEY = `${PREFIX}schema-version`;
 
 (function migrateStorageOnce() {
@@ -39,6 +54,13 @@ const VERSION_KEY = `${PREFIX}schema-version`;
         localStorage.removeItem(key);
       }
     }
+    // Also wipe any stale Zustand-store entry from an earlier dev cycle so
+    // the rehydrated shape matches what store.ts expects today.
+    try {
+      localStorage.removeItem("recipy-store");
+    } catch {
+      /* ignore */
+    }
     localStorage.setItem(VERSION_KEY, String(SCHEMA_VERSION));
   } catch {
     /* localStorage unavailable — nothing to migrate. */
@@ -46,10 +68,8 @@ const VERSION_KEY = `${PREFIX}schema-version`;
 })();
 
 const K = {
-  activeRecipe: `${PREFIX}active-recipe`,
   cookingState: `${PREFIX}cooking-state`,
   recentRecipes: `${PREFIX}recent-recipes`,
-  lastSearch: `${PREFIX}last-search`,
   notificationsPrompt: `${PREFIX}notifications-prompt`,
   dismissedMakeahead: `${PREFIX}dismissed-makeahead`,
   customChips: `${PREFIX}custom-chips`,
@@ -93,20 +113,6 @@ function remove(key: string): void {
   }
 }
 
-// ---------- Active recipe (spec §7.9) ----------
-
-export function getActiveRecipe(): ActiveRecipe | null {
-  return read<ActiveRecipe>(K.activeRecipe);
-}
-
-export function setActiveRecipe(value: ActiveRecipe): void {
-  write(K.activeRecipe, value);
-}
-
-export function clearActiveRecipe(): void {
-  remove(K.activeRecipe);
-}
-
 // ---------- Cooking state (spec §7.9) ----------
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -143,25 +149,6 @@ export function pushRecentRecipe(recipe: Recipe): void {
   const existing = getRecentRecipes().filter((r) => r.id !== recipe.id);
   const next = [recipe, ...existing].slice(0, RECENT_CAP);
   write(K.recentRecipes, next);
-}
-
-// ---------- Last search (spec §7.9) ----------
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-export function getLastSearch(): LastSearch | null {
-  const ls = read<LastSearch>(K.lastSearch);
-  if (!ls) return null;
-  const age = Date.now() - new Date(ls.fetchedAt).getTime();
-  if (age > ONE_DAY_MS) {
-    remove(K.lastSearch);
-    return null;
-  }
-  return ls;
-}
-
-export function setLastSearch(value: LastSearch): void {
-  write(K.lastSearch, value);
 }
 
 // ---------- Notifications prompt state (spec §6) ----------

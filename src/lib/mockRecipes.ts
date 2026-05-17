@@ -17,7 +17,7 @@ export const MOCK_RECIPES: Recipe[] = [
     tagline: "Tangy, peppery, and ready in under 30 minutes",
     servings: { base: 2, current: 2 },
     times: { prepMinutes: 10, cookMinutes: 20, totalMinutes: 30 },
-    difficulty: { score: 2, label: "weeknight easy" },
+    difficulty: { score: 2, label: "needs a bit of focus" },
     calories: { perServing: 280, inferenceSource: "page" },
     // Stuffed with the full HugeIcons-covered set so the Equipment tab
     // shows every available icon — used for icon-library review. Real

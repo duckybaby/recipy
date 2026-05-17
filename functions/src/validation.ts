@@ -116,11 +116,9 @@ export const RecipeSchema = z.object({
       z.literal(2),
       z.literal(3),
       z.literal(4),
-      z.literal(5),
     ]),
     label: z.enum([
       "effortless",
-      "weeknight easy",
       "needs a bit of focus",
       "weekend project",
       "advanced",
