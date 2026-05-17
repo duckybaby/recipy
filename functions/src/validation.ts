@@ -110,19 +110,45 @@ export const RecipeSchema = z.object({
     cookMinutes: z.number().int().nonnegative(),
     totalMinutes: z.number().int().nonnegative(),
   }),
+  // Difficulty: 4 levels in v1. We accept legacy values from Claude's
+  // training (score 5, label "weeknight easy", etc.) and remap them on
+  // ingest rather than dropping the whole recipe — the user doesn't care
+  // about our enum war.
   difficulty: z.object({
-    score: z.union([
-      z.literal(1),
-      z.literal(2),
-      z.literal(3),
-      z.literal(4),
-    ]),
-    label: z.enum([
-      "effortless",
-      "needs a bit of focus",
-      "weekend project",
-      "advanced",
-    ]),
+    score: z.preprocess((val) => {
+      // Clamp out-of-range integers to the nearest valid level. Anything
+      // unparseable falls through and zod fails it.
+      if (typeof val !== "number") return val;
+      if (val <= 1) return 1;
+      if (val >= 4) return 4;
+      return Math.round(val);
+    }, z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])),
+    label: z.preprocess(
+      (val) => {
+        if (typeof val !== "string") return val;
+        const key = val.toLowerCase().trim();
+        // Remap retired labels + close synonyms to the v1 enum.
+        const LEGACY: Record<string, string> = {
+          easy: "needs a bit of focus",
+          simple: "needs a bit of focus",
+          "weeknight easy": "needs a bit of focus",
+          intermediate: "needs a bit of focus",
+          medium: "needs a bit of focus",
+          moderate: "needs a bit of focus",
+          challenging: "weekend project",
+          difficult: "weekend project",
+          hard: "weekend project",
+          expert: "advanced",
+        };
+        return LEGACY[key] ?? key;
+      },
+      z.enum([
+        "effortless",
+        "needs a bit of focus",
+        "weekend project",
+        "advanced",
+      ]),
+    ),
   }),
   calories: z.object({
     perServing: z.number().int().nonnegative(),

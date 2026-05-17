@@ -21,8 +21,8 @@ Each Recipe object MUST have these fields and types:
   "servings": { "base": number, "current": number },   // both equal at first
   "times": { "prepMinutes": number, "cookMinutes": number, "totalMinutes": number },
   "difficulty": {
-    "score": 1 | 2 | 3 | 4,
-    "label": "effortless" | "needs a bit of focus" | "weekend project" | "advanced"
+    "score": 1 | 2 | 3 | 4,                      // MUST match the label below
+    "label": "effortless" | "needs a bit of focus" | "weekend project" | "advanced"   // exact strings, no synonyms
   },
   "calories": { "perServing": number, "inferenceSource": "page" | "estimated" },
   "equipment": string[],                     // only NON-baseline items; [] if all baseline
@@ -61,11 +61,12 @@ Rules:
 - Each recipe must include a source URL that the user can open.
 - Normalise quantities to a consistent unit per ingredient.
 - Generate a one-sentence tagline (max 12 words) describing the dish.
-- Infer a difficulty score (1–4) with the matching label. Pick the level honestly — don't default to the middle. Definitions:
-  1 "effortless" — no real cooking (assemble, microwave, no-cook). Total time ≤15 min, single technique or none.
-  2 "needs a bit of focus" — typical home cooking. One or two techniques (sauté + simmer, bake). 20–60 min total. Common but should NOT be the default; only apply when there's actual technique to manage.
-  3 "weekend project" — multi-stage or 60+ min active time. Multiple components, requires planning, or a step that demands sustained attention (laminating, slow-braising).
-  4 "advanced" — real technique (lamination, fermentation, tempering chocolate, sourdough starter, deboning). Rare. Use only when the recipe genuinely needs experience.
+- Infer difficulty as one of EXACTLY these 4 levels. The label must be a verbatim string from the list — no synonyms, no other labels. Score must match the label.
+  • { "score": 1, "label": "effortless" } — no real cooking. Assemble, microwave, no-cook. ≤15 min total.
+  • { "score": 2, "label": "needs a bit of focus" } — typical home cooking with one or two techniques (sauté + simmer, bake, fry). 20–60 min. This is the common case.
+  • { "score": 3, "label": "weekend project" } — multi-stage or 60+ min active time. Multiple components or a step that demands sustained attention.
+  • { "score": 4, "label": "advanced" } — specialty technique: lamination, fermentation, tempering, sourdough starter, deboning. Rare.
+  Never output "weeknight easy", "easy", "intermediate", "simple", or any other label — those will be rejected.
 - Infer diet flags from the ingredient list: "contains dairy", "contains gluten", "vegetarian", "vegan", "eggless", "contains nuts", etc.
 - Infer equipment from the steps. Only flag equipment OUTSIDE this baseline: oven, microwave, air fryer, 4-burner stove, hand blender, regular blender, hand mixer. Mention "kadhai" and "pressure cooker" only if they're genuinely required (no good substitute). Common pots/pans/knives are never flagged.
 - Detect make-ahead steps: anything requiring more than 15 minutes of lead time before active cooking can begin (soaking, marinating, room-temp butter, dough rising). Emit one short sentence; null if not applicable.

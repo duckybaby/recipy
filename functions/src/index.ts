@@ -27,6 +27,7 @@ import {
   RecomputeFieldBodySchema,
   SubstitutionsBodySchema,
   FeedbackBodySchema,
+  RecipeSchema,
   safeParseRecipe,
   type Recipe,
 } from "./validation";
@@ -157,10 +158,27 @@ app.post(
       })) {
         const objects = parser.push(chunk);
         for (const obj of objects) {
-          const valid = safeParseRecipe(reIdRecipe(obj));
+          const withId = reIdRecipe(obj);
+          const valid = safeParseRecipe(withId);
           if (valid) {
             collected.push(valid);
             writeLine({ type: "recipe", recipe: valid });
+          } else {
+            // Log enough to see WHY a recipe was dropped without dumping the
+            // whole object. Most common cause historically: difficulty label
+            // or score outside the v1 enum.
+            const errPreview = RecipeSchema.safeParse(withId);
+            const issues = errPreview.success
+              ? "n/a"
+              : errPreview.error.issues
+                  .slice(0, 3)
+                  .map((i) => `${i.path.join(".")}=${i.message}`)
+                  .join(" · ");
+            const titlePreview =
+              typeof (withId as { title?: unknown }).title === "string"
+                ? (withId as { title: string }).title.slice(0, 80)
+                : "<no title>";
+            console.warn(`dropped recipe "${titlePreview}": ${issues}`);
           }
         }
       }
