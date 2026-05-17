@@ -18,10 +18,13 @@ const PREFIX = "recipe-app:";
 // Bump this whenever a stored shape changes in a way old data can't be
 // trusted with. On boot we compare the value in localStorage against this
 // number; mismatch → wipe every `${PREFIX}*` key once, so the user doesn't
-// have to clear Safari storage by hand. Current bump: equipment lists are
-// richer now that we ship HugeIcons, and cached recipes still hold the old
-// single-item list.
-const SCHEMA_VERSION = 2;
+// have to clear Safari storage by hand.
+//
+// v3: forced reset after M2 polish ship — stale cached search results
+//   from earlier dev iterations were causing odd back-navigation refetches
+//   on real devices. Cleanest fix is a single wipe for everyone.
+// v2: equipment lists got richer when we shipped HugeIcons.
+const SCHEMA_VERSION = 3;
 const VERSION_KEY = `${PREFIX}schema-version`;
 
 (function migrateStorageOnce() {
