@@ -22,9 +22,7 @@ export function ServingsAdjuster({ servings, onChange }: Props) {
   };
 
   return (
-    <div className="inline-flex items-center gap-2">
-      <span className="text-body text-ink-muted">Serves</span>
-      <div className="inline-flex items-center rounded-full border-[2.5px] border-ink bg-paper shadow-brutal-sm">
+    <div className="inline-flex items-center rounded-full border border-line bg-paper shadow-soft">
         <button
           type="button"
           onClick={dec}
@@ -46,7 +44,6 @@ export function ServingsAdjuster({ servings, onChange }: Props) {
         >
           <Plus size={14} />
         </button>
-      </div>
     </div>
   );
 }

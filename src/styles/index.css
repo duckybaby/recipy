@@ -5,77 +5,89 @@
    This file is THE re-skin entrypoint. Change values in @theme
    + tweak primitives in @layer components to swap the whole UI.
 
-   CURRENT SKIN: Neobrutalism — chunky pure-black borders,
-   hard offset shadows, sharp corners, eyeball yellow accent.
+   CURRENT SKIN: "Modern Cookbook" — editorial type pairing
+   (Fraunces serif for headings + Inter sans for body), white
+   paper, tomato-red accent, generous spacing, soft long shadows.
+   Reads like a refined cookbook, not a tech demo.
    ============================================================ */
 @theme {
-  /* ---- Type scale (spec §10) ---- */
-  --text-meta: 11px;        /* tiny meta: skeleton, step counter */
-  --text-caption: 12px;     /* card meta, sheet rows */
-  --text-body: 12.5px;      /* default body */
-  --text-strong: 13px;      /* button text, link text */
-  --text-step: 14px;        /* cooking-mode step text */
-  --text-section: 15px;     /* section titles */
-  --text-title: 17px;       /* page titles */
+  /* ---- Type scale ----
+     All values in rem so they scale with the user's browser font size.
+     Headings use clamp(min, vw-based, max) for fluid scaling between
+     small phones and large screens. Body stays a fixed 1rem so it
+     doesn't get awkward at extreme sizes. */
+  --text-meta: 0.8125rem;     /* 13px — tiny meta */
+  --text-caption: 0.875rem;   /* 14px — card meta, sheet rows */
+  --text-body: 1rem;          /* 16px — default body */
+  --text-strong: 0.9375rem;   /* 15px — button text, link text */
+  --text-step: 1.0625rem;     /* 17px — cooking-mode step */
+  --text-section: clamp(1.25rem, 4.5vw, 1.5rem);   /* 20–24px — section titles */
+  --text-title: clamp(1.75rem, 7vw, 2.25rem);      /* 28–36px — page titles */
+  --text-card-title: clamp(1.125rem, 4vw, 1.375rem); /* 18–22px — card titles */
 
-  /* ---- Fonts ---- */
+  /* ---- Fonts ----
+     Inter for body; Fraunces variable serif for headings. Fraunces
+     has an opsz axis so the browser auto-tunes letter shape to font
+     size — bigger headings get more contrast, body stays even. */
   --font-sans:
     "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
+  --font-serif:
+    "Fraunces", "Iowan Old Style", "Georgia", "Times New Roman", serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* ---- Ink (text + borders) — pure black for that structural brutalist feel.
-     Muted/faint stay desaturated dark grays for secondary text. */
-  --color-ink: #0a0a0a;
-  --color-ink-muted: #404040;
+  /* ---- Ink — near-black with warm grays for secondary text ---- */
+  --color-ink: #1a1a1a;
+  --color-ink-muted: #525252;
   --color-ink-faint: #737373;
   --color-ink-disabled: #a3a3a3;
 
-  /* ---- Paper (page bg, card fills) ---- */
-  --color-paper: #fffdf5;       /* warm cream, not surgical white */
-  --color-paper-soft: #f5f0e0;  /* darker cream for skeleton + step bubble */
+  /* ---- Paper — pure white per request ---- */
+  --color-paper: #ffffff;
+  --color-paper-soft: #f6f5f1;  /* warm-gray skeletons + step bubble */
 
-  /* ---- Line — borders are STRUCTURAL in neobrutalism. Same as ink. ---- */
-  --color-line: #0a0a0a;
-  --color-line-soft: #d4d0c0; /* inner dividers only — keeps lists readable */
+  /* ---- Lines — warm hairlines, not pure black ---- */
+  --color-line: #e8e4dc;
+  --color-line-soft: #f1ede5;
 
-  --color-overlay: rgba(10, 10, 10, 0.55);
+  --color-overlay: rgba(26, 26, 26, 0.5);
 
-  /* ---- Accent — eyeball yellow. The "loud" colour. ---- */
-  --color-accent: #fbe14a;
-  --color-accent-soft: #fff3a1;
+  /* ---- Accent — tomato red. The one loud colour, used sparingly. ---- */
+  --color-accent: #d63f2a;
+  --color-accent-hover: #b8331f;
+  --color-accent-soft: #fdeae5;
 
-  /* ---- Semantic — Success (ingredient available, cook complete) ---- */
-  --color-success-50: #d9f99d;
-  --color-success-300: #84cc16;
-  --color-success-500: #4d7c0f;
-  --color-success-700: #1a2e05;
+  /* ---- Semantic — Success (cookbook-green, less saturated) ---- */
+  --color-success-50: #ecf3ee;
+  --color-success-300: #88a896;
+  --color-success-500: #2d6a4f;
+  --color-success-700: #1b4332;
 
-  /* ---- Semantic — Warning (missing ingredient, make-ahead nudge) ---- */
-  --color-warning-50: #ffeacc;
-  --color-warning-300: #fb923c;
-  --color-warning-500: #ea580c;
-  --color-warning-700: #7c2d12;
-  --color-warning-800: #431407;
+  /* ---- Semantic — Warning (saffron amber, gentle) ---- */
+  --color-warning-50: #fcf3e8;
+  --color-warning-300: #e8b070;
+  --color-warning-500: #bc6c25;
+  --color-warning-700: #8b4a16;
+  --color-warning-800: #5e2f0d;
 
   /* ---- Missing-ingredient dot ---- */
-  --color-missing: #ea580c;
+  --color-missing: #bc6c25;
 
-  /* ---- Info — reused for selected chip state. Maps to the accent yellow. ---- */
-  --color-info-50: #fff3a1;
-  --color-info-300: #fbe14a;
-  --color-info-700: #0a0a0a;
+  /* ---- Info — re-uses the accent for the selected-chip state ---- */
+  --color-info-50: #fdeae5;
+  --color-info-300: #d63f2a;
+  --color-info-700: #1a1a1a;
 
-  /* ---- Radii — corners go SHARP. Pills stay pill-shaped because pills are a brutalist motif. ---- */
-  --radius-button: 0px;
-  --radius-card: 0px;
-  --radius-sheet: 0px;
+  /* ---- Radii — editorial. Soft on cards, sharp-ish on chips. ---- */
+  --radius-button: 10px;
+  --radius-card: 14px;
+  --radius-sheet: 20px;
   --radius-pill: 9999px;
 
-  /* ---- Hard offset shadows (no blur). ---- */
-  --shadow-brutal: 5px 5px 0 0 var(--color-ink);
-  --shadow-brutal-sm: 3px 3px 0 0 var(--color-ink);
-  --shadow-brutal-press: 2px 2px 0 0 var(--color-ink);
+  /* ---- Soft layered shadows ---- */
+  --shadow-soft: 0 1px 2px rgba(26, 26, 26, 0.04), 0 4px 12px rgba(26, 26, 26, 0.05);
+  --shadow-soft-lg: 0 2px 4px rgba(26, 26, 26, 0.05), 0 12px 28px rgba(26, 26, 26, 0.08);
+  --shadow-cta: 0 1px 2px rgba(214, 63, 42, 0.18), 0 6px 18px rgba(214, 63, 42, 0.22);
 }
 
 /* ============================================================
@@ -88,13 +100,18 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overscroll-behavior-y: none;
+    /* Let iOS Safari do its native rubber-band at both ends of the page.
+       `none` would clamp the scroll and feel rigid. */
+    overscroll-behavior-y: auto;
   }
   body {
     @apply bg-paper text-ink font-sans text-body;
-    line-height: 1.5;
+    line-height: 1.6;
     margin: 0;
-    min-height: 100svh;
+    /* dvh = dynamic viewport height; expands when the browser URL bar hides,
+       collapses when it shows. Better than svh (smallest, always pessimistic)
+       or vh (largest, can be obscured) for full-height scrollers. */
+    min-height: 100dvh;
   }
   button {
     @apply select-none;
@@ -109,123 +126,135 @@
     color: inherit;
     text-decoration: none;
   }
+
+  /* Headings default: serif. Components override weight/size as needed. */
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
 }
 
 /* ============================================================
-   Component primitives — change these to re-shape chips, pills,
-   buttons across the app in one place.
+   Component primitives
    ============================================================ */
 @layer components {
-  /* -------- Chip (Form, spec §3) — 44px min tap target -------- */
+  /* -------- Chip — 48px tap target, hairline border, soft hover -------- */
   .chip {
-    @apply inline-flex items-center justify-center rounded-pill
-      text-strong leading-none;
-    border: 2.5px solid var(--color-ink);
-    padding: 0 14px;
-    min-height: 44px;
-    font-weight: 600;
-    transition: transform 80ms ease-out, box-shadow 80ms ease-out, background-color 80ms ease-out;
-  }
-  .chip-unselected {
+    @apply inline-flex items-center justify-center rounded-pill leading-none;
+    border: 1.5px solid var(--color-line);
     background-color: var(--color-paper);
     color: var(--color-ink);
+    font-size: 15px;
+    font-weight: 500;
+    padding: 0 16px;
+    min-height: 48px;
+    transition: background-color 120ms ease-out, border-color 120ms ease-out,
+      color 120ms ease-out;
   }
   .chip-unselected:hover {
-    background-color: var(--color-accent-soft);
+    background-color: var(--color-paper-soft);
+    border-color: var(--color-ink-faint);
   }
   .chip-selected {
-    background-color: var(--color-accent);
-    color: var(--color-ink);
-    box-shadow: var(--shadow-brutal-sm);
-  }
-  .chip:active {
-    transform: translate(1px, 1px);
-  }
-  .chip-selected:active {
-    box-shadow: var(--shadow-brutal-press);
+    background-color: var(--color-accent-soft);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    font-weight: 600;
   }
 
   /* -------- Pill (availability badge, difficulty, diet flags) -------- */
   .pill {
-    @apply inline-flex items-center gap-1.5 rounded-pill text-caption leading-none;
-    border: 2px solid var(--color-ink);
-    padding: 5px 10px;
-    font-weight: 600;
+    @apply inline-flex items-center gap-1.5 rounded-pill leading-none;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
   }
   .pill-success {
-    background-color: var(--color-success-300);
+    background-color: var(--color-success-50);
     color: var(--color-success-700);
   }
   .pill-warning {
-    background-color: var(--color-warning-300);
-    color: var(--color-warning-800);
+    background-color: var(--color-warning-50);
+    color: var(--color-warning-700);
   }
   .pill-secondary {
-    background-color: var(--color-paper);
-    color: var(--color-ink);
+    background-color: var(--color-paper-soft);
+    color: var(--color-ink-muted);
   }
   .pill-info {
-    background-color: var(--color-accent);
-    color: var(--color-ink);
+    background-color: var(--color-accent-soft);
+    color: var(--color-accent);
   }
 
-  /* -------- Primary CTA — chunky yellow, hard shadow -------- */
+  /* -------- Primary CTA — tomato fill, white text, generous height ---- */
   .btn-primary {
-    @apply inline-flex w-full items-center justify-center rounded-button
-      text-step;
+    @apply inline-flex w-full items-center justify-center rounded-button;
     background-color: var(--color-accent);
-    color: var(--color-ink);
-    border: 3px solid var(--color-ink);
-    box-shadow: var(--shadow-brutal);
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
     min-height: 56px;
-    padding: 0 18px;
-    font-weight: 700;
-    transition: transform 80ms ease-out, box-shadow 80ms ease-out;
+    padding: 0 20px;
+    box-shadow: var(--shadow-cta);
+    transition: background-color 120ms ease-out, transform 120ms ease-out,
+      box-shadow 120ms ease-out;
+  }
+  .btn-primary:hover {
+    background-color: var(--color-accent-hover);
   }
   .btn-primary:active {
-    transform: translate(3px, 3px);
-    box-shadow: var(--shadow-brutal-press);
+    transform: scale(0.98);
   }
   .btn-primary:disabled {
     cursor: not-allowed;
     opacity: 0.45;
-    box-shadow: var(--shadow-brutal-press);
+    box-shadow: none;
   }
 
-  /* -------- Outline button — white with hard shadow -------- */
+  /* -------- Outline button — hairline border, neutral hover ---- */
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded-button text-strong;
+    @apply inline-flex items-center justify-center rounded-button;
     background-color: var(--color-paper);
     color: var(--color-ink);
-    border: 2.5px solid var(--color-ink);
-    box-shadow: var(--shadow-brutal-sm);
-    min-height: 44px;
-    padding: 0 14px;
-    font-weight: 600;
-    transition: transform 80ms ease-out, box-shadow 80ms ease-out;
+    border: 1px solid var(--color-line);
+    font-size: 15px;
+    font-weight: 500;
+    min-height: 48px;
+    padding: 0 16px;
+    transition: background-color 120ms ease-out, border-color 120ms ease-out;
+  }
+  .btn-outline:hover {
+    background-color: var(--color-paper-soft);
+    border-color: var(--color-ink-faint);
   }
   .btn-outline:active {
-    transform: translate(2px, 2px);
-    box-shadow: var(--shadow-brutal-press);
+    transform: scale(0.99);
   }
 
-  /* -------- Card primitive (replaces ad-hoc border + rounded utilities) ---- */
+  /* -------- Card primitive — hairline + soft shadow on hover ---- */
   .card {
     background-color: var(--color-paper);
-    border: 2.5px solid var(--color-ink);
+    border: 1px solid var(--color-line);
   }
   .card-interactive {
-    box-shadow: var(--shadow-brutal-sm);
-    transition: transform 100ms ease-out, box-shadow 100ms ease-out;
+    box-shadow: var(--shadow-soft);
+    transition: box-shadow 160ms ease-out, transform 120ms ease-out,
+      border-color 160ms ease-out;
+  }
+  .card-interactive:hover {
+    box-shadow: var(--shadow-soft-lg);
+    border-color: var(--color-ink-disabled);
   }
   .card-interactive:active {
-    transform: translate(2px, 2px);
-    box-shadow: var(--shadow-brutal-press);
+    transform: scale(0.995);
   }
 
-  /* -------- Focus ring — keeps the brutalist offset feel ---- */
+  /* -------- Focus ring — uses the accent so it reads as "active" ---- */
   .focus-ring:focus-visible {
-    outline: 3px solid var(--color-ink);
+    outline: 2.5px solid var(--color-accent);
     outline-offset: 3px;
   }
 }
@@ -239,7 +268,7 @@
     background-color: transparent;
   }
   50% {
-    background-color: rgba(251, 225, 74, 0.6); /* accent yellow */
+    background-color: rgba(214, 63, 42, 0.18);
   }
 }
 .timer-flash {
@@ -249,8 +278,138 @@
 /* Safe areas (iOS notch / home indicator) + minimum top padding so
    the content never bleeds right to the screen edge on desktop. */
 .safe-pt {
-  padding-top: max(env(safe-area-inset-top), 16px);
+  padding-top: max(env(safe-area-inset-top), 48px);
 }
 .safe-pb {
-  padding-bottom: max(env(safe-area-inset-bottom), 16px);
+  padding-bottom: max(env(safe-area-inset-bottom), 20px);
+}
+
+/* ============================================================
+   Loader animations (Results page)
+   ============================================================ */
+
+/* Spoon stirring in pot — circular sweep. */
+@keyframes spoon-stir {
+  0%   { transform: rotate(-12deg); }
+  50%  { transform: rotate(14deg); }
+  100% { transform: rotate(-12deg); }
+}
+.spoon { animation: spoon-stir 1.6s ease-in-out infinite; }
+
+/* Knife chopping — small up/down with a slight rotational rock. */
+@keyframes knife-chop {
+  0%   { transform: translateY(-8px) rotate(-2deg); }
+  40%  { transform: translateY(0) rotate(0deg); }
+  55%  { transform: translateY(-2px) rotate(0deg); }
+  100% { transform: translateY(-8px) rotate(-2deg); }
+}
+.knife { animation: knife-chop 1.1s cubic-bezier(0.35, 0.8, 0.4, 1) infinite; }
+
+/* Whisk spinning — continuous rotation, fast for mixing energy. */
+@keyframes whisk-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.whisk { animation: whisk-spin 1.3s linear infinite; }
+
+/* Steam wisps drifting up and fading — three offset for parallax. */
+@keyframes steam-rise {
+  0%   { transform: translateY(2px); opacity: 0.05; }
+  50%  { opacity: 0.55; }
+  100% { transform: translateY(-6px); opacity: 0; }
+}
+.steam-a { animation: steam-rise 2.2s ease-in-out infinite; }
+.steam-b { animation: steam-rise 2.2s ease-in-out infinite 0.55s; }
+.steam-c { animation: steam-rise 2.2s ease-in-out infinite 1.1s; }
+
+/* Progress bar — animated stripe overlay so it never looks frozen
+   between stream chunks. Uses a thin diagonal gradient that slides
+   left-to-right inside the filled portion. */
+@keyframes loader-stripe {
+  from { background-position: 0 0; }
+  to   { background-position: 24px 0; }
+}
+.loader-bar-fill {
+  background-image: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0) 35%,
+    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0) 65%,
+    rgba(255, 255, 255, 0) 100%
+  ),
+  linear-gradient(var(--color-accent), var(--color-accent));
+  background-size: 24px 100%, 100% 100%;
+  background-repeat: repeat, no-repeat;
+  animation: loader-stripe 700ms linear infinite;
+}
+
+/* Respect reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  .spoon, .knife, .whisk,
+  .steam-a, .steam-b, .steam-c,
+  .loader-bar-fill {
+    animation: none;
+  }
+}
+
+/* Card entrance — staggered slide-up from below for the Results list.
+   `backwards` fill-mode holds the start state during the animation-delay
+   so cards don't flash at full opacity before their turn. */
+@keyframes card-rise {
+  from { transform: translateY(28px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.card-rise {
+  animation: card-rise 240ms cubic-bezier(0.22, 0.8, 0.36, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-rise { animation: none; }
+}
+
+/* ============================================================
+   Page transitions (Phase 2)
+   ============================================================ */
+
+/* Modal-style entry: slides up from below the viewport. Used for
+   Form -> Results and Recipe -> Cooking. The animation has no
+   `fill-mode`, so the transform reverts to identity once it
+   finishes — keeps position:fixed/sticky children unaffected. */
+@keyframes page-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.page-enter-slide-up {
+  animation: page-slide-up 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Soft fade entry: opacity-only. Used wherever we don't want a
+   pronounced motion but still want the new screen to feel intentional. */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.page-enter-fade {
+  animation: page-fade-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-slide-up,
+  .page-enter-fade { animation: none; }
+}
+
+/* Recipe page body fade — applied to everything below the morphing title
+   so the rest of the page eases in while the shared-element animation
+   runs. 80ms delay gives the morph a head start. */
+@keyframes recipe-body-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.recipe-body-fade {
+  animation: recipe-body-fade 280ms ease-out 80ms backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recipe-body-fade { animation: none; }
 }

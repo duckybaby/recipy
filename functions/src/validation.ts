@@ -41,8 +41,15 @@ const MainIngredientEnum = z.enum([
   "tofu",
 ]);
 
-// timeMax: 15 | 30 | 60 | null. The frontend collapses "any" → null before sending.
-const TimeMaxSchema = z.union([
+// Single-select prep/cook max time. Frontend collapses "any" → null
+// before sending (both mean "no constraint").
+const PrepMaxSchema = z.union([
+  z.literal(5),
+  z.literal(15),
+  z.literal(30),
+  z.null(),
+]);
+const CookMaxSchema = z.union([
   z.literal(15),
   z.literal(30),
   z.literal(60),
@@ -53,7 +60,8 @@ export const SearchFiltersSchema = z.object({
   meal: z.array(MealEnum).default([]),
   cuisines: z.array(CuisineEnum).default([]),
   diet: z.array(DietEnum).default([]),
-  timeMax: TimeMaxSchema.default(null),
+  prepMax: PrepMaxSchema.default(null),
+  cookMax: CookMaxSchema.default(null),
   vibes: z.array(VibeEnum).default([]),
   mainIngredients: z.array(MainIngredientEnum).default([]),
   surprise: z.boolean().default(false),

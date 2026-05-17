@@ -118,11 +118,13 @@ export type Diet =
   | "vegan"
   | "jain";
 
-// 15/30/60 = explicit cap. "any" = user explicitly picked "No limit".
-// null = user didn't touch the chip group. Backend treats "any" and null
-// the same way (no time constraint); the distinction is purely UI state
-// so the "No limit" chip can render as selected.
-export type TimeMax = 15 | 30 | 60 | "any" | null;
+// Two single-select time filters: prep (hands-on work) and cook (passive
+// or active heat). "any" = user explicitly picked "No limit". null =
+// user didn't touch the group. Backend treats "any" and null as the
+// same (no constraint); the split is UI state so "No limit" can render
+// as selected.
+export type PrepMax = 5 | 15 | 30 | "any" | null;
+export type CookMax = 15 | 30 | 60 | "any" | null;
 
 export type Vibe =
   | "comforting"
@@ -148,7 +150,8 @@ export type SearchFilters = {
   meal: Meal[];
   cuisines: Cuisine[];
   diet: Diet[];
-  timeMax: TimeMax;
+  prepMax: PrepMax;
+  cookMax: CookMax;
   vibes: Vibe[];
   mainIngredients: MainIngredient[];
   surprise?: boolean;

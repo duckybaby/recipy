@@ -326,10 +326,26 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 // ----- Re-id helper -----
 // Claude assigns its own ids; we replace with a server-side UUID so the
-// frontend can rely on uniqueness across responses.
+// frontend can rely on uniqueness across responses. We also overwrite
+// `source.fetchedAt` with the actual server time — bake-off testing showed
+// both Haiku and Sonnet emit timestamps fabricated from prompt context
+// rather than the real request time. Shallow-merging the source object
+// guards against malformed responses missing it entirely.
 function reIdRecipe(raw: unknown): unknown {
   if (!raw || typeof raw !== "object") return raw;
-  return { ...(raw as Record<string, unknown>), id: randomUUID() };
+  const obj = raw as Record<string, unknown>;
+  const source =
+    obj.source && typeof obj.source === "object"
+      ? (obj.source as Record<string, unknown>)
+      : {};
+  return {
+    ...obj,
+    id: randomUUID(),
+    source: {
+      ...source,
+      fetchedAt: new Date().toISOString(),
+    },
+  };
 }
 
 // ----- Export -----

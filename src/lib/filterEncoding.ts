@@ -1,8 +1,8 @@
-// URLSearchParams ↔ SearchFilters codec.
+// URLSearchParams <-> SearchFilters codec.
 //
-// The form persists state in the URL (spec §3 — "form persists in URL
-// search params so back-navigation restores selections without storage").
-// Results screen reads filters from the same params on mount.
+// The form persists state in the URL (spec §3) so back-navigation
+// restores selections without storage. Results screen reads filters
+// from the same params on mount.
 
 import type {
   SearchFilters,
@@ -11,7 +11,8 @@ import type {
   Diet,
   Vibe,
   MainIngredient,
-  TimeMax,
+  PrepMax,
+  CookMax,
 } from "./types";
 
 const MEALS = [
@@ -69,10 +70,22 @@ function parseList<T extends string>(
 ): T[] {
   if (!raw) return [];
   const set = new Set<string>(valid);
-  return raw.split(",").filter((v): v is T => set.has(v));
+  // Pass through user-added values (prefixed with "custom:") even though
+  // they aren't in the enum. They get cast to T at the type boundary.
+  return raw
+    .split(",")
+    .filter((v): v is T => set.has(v) || v.startsWith("custom:"));
 }
 
-function parseTimeMax(raw: string | null): TimeMax {
+function parsePrepMax(raw: string | null): PrepMax {
+  if (raw === null) return null;
+  if (raw === "any") return "any";
+  const n = Number(raw);
+  if (n === 5 || n === 15 || n === 30) return n;
+  return null;
+}
+
+function parseCookMax(raw: string | null): CookMax {
   if (raw === null) return null;
   if (raw === "any") return "any";
   const n = Number(raw);
@@ -86,7 +99,8 @@ export function decodeFilters(params: URLSearchParams): SearchFilters {
     meal: parseList(params.get("meal"), MEALS),
     cuisines: parseList(params.get("cuisines"), CUISINES),
     diet: parseList(params.get("diet"), DIETS),
-    timeMax: parseTimeMax(params.get("time")),
+    prepMax: parsePrepMax(params.get("prep")),
+    cookMax: parseCookMax(params.get("cook")),
     vibes: parseList(params.get("vibes"), VIBES),
     mainIngredients: parseList(params.get("main"), MAIN_INGREDIENTS),
     surprise: params.get("surprise") === "true",
@@ -99,7 +113,8 @@ export function encodeFilters(filters: SearchFilters): URLSearchParams {
   if (filters.meal.length) p.set("meal", filters.meal.join(","));
   if (filters.cuisines.length) p.set("cuisines", filters.cuisines.join(","));
   if (filters.diet.length) p.set("diet", filters.diet.join(","));
-  if (filters.timeMax !== null) p.set("time", String(filters.timeMax));
+  if (filters.prepMax !== null) p.set("prep", String(filters.prepMax));
+  if (filters.cookMax !== null) p.set("cook", String(filters.cookMax));
   if (filters.vibes.length) p.set("vibes", filters.vibes.join(","));
   if (filters.mainIngredients.length)
     p.set("main", filters.mainIngredients.join(","));
@@ -127,8 +142,15 @@ export function summarizeFilters(filters: SearchFilters): string {
   const parts: string[] = [];
   if (filters.meal.length) parts.push(...filters.meal.map(prettify));
   if (filters.cuisines.length) parts.push(...filters.cuisines.map(prettify));
-  if (filters.timeMax !== null) {
-    parts.push(filters.timeMax === "any" ? "No time limit" : `${filters.timeMax}m`);
+  if (filters.prepMax !== null) {
+    parts.push(
+      filters.prepMax === "any" ? "Any prep" : `Prep ${filters.prepMax}m`,
+    );
+  }
+  if (filters.cookMax !== null) {
+    parts.push(
+      filters.cookMax === "any" ? "Any cook" : `Cook ${filters.cookMax}m`,
+    );
   }
   if (filters.diet.length) parts.push(...filters.diet.map(prettify));
   if (filters.vibes.length) parts.push(...filters.vibes.map(prettify));
@@ -139,17 +161,21 @@ export function summarizeFilters(filters: SearchFilters): string {
   return parts.join(" · ");
 }
 
-/** Convert to the API request body shape (spec §7.2 /api/search-recipes). */
+/** Convert to the API request body shape. */
 export function toApiBody(filters: SearchFilters): SearchFilters {
   return {
     meal: filters.meal,
     cuisines: filters.cuisines,
     diet: filters.diet,
-    // "any" → null for the backend; both mean "no time constraint".
-    timeMax:
-      filters.timeMax === "any" || filters.timeMax === null
+    // "any" -> null for the backend; both mean "no constraint".
+    prepMax:
+      filters.prepMax === "any" || filters.prepMax === null
         ? null
-        : filters.timeMax,
+        : filters.prepMax,
+    cookMax:
+      filters.cookMax === "any" || filters.cookMax === null
+        ? null
+        : filters.cookMax,
     vibes: filters.vibes,
     mainIngredients: filters.mainIngredients,
     surprise: filters.surprise ?? false,

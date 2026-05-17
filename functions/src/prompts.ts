@@ -55,6 +55,8 @@ You are a recipe-finding assistant. Given filters, you search the web for exactl
 
 Rules:
 - Search reputable recipe sites: archanaskitchen.com, hebbarskitchen.com, vegrecipesofindia.com, indianhealthyrecipes.com, seriouseats.com, bbcgoodfood.com, nytcooking.com, bonappetit.com, allrecipes.com.
+- Every source URL you cite must be a real page you actually retrieved via web_search during THIS call. Do not cite a URL you have not fetched. If web_search returns fewer than 3 usable sources, return fewer than 3 recipes — never invent a URL to fill the array.
+- Prefer dedicated single-recipe pages over roundup posts (e.g. "10 vegetarian breakfast ideas"). A roundup is only acceptable if it contains FULL ingredient quantities AND complete step-by-step instructions for the specific dish you're citing. If a roundup only has a paragraph summary, skip it.
 - Do NOT invent recipes. If web search returns nothing matching, return an empty array.
 - Each recipe must include a source URL that the user can open.
 - Normalise quantities to a consistent unit per ingredient.
@@ -64,8 +66,9 @@ Rules:
 - Infer equipment from the steps. Only flag equipment OUTSIDE this baseline: oven, microwave, air fryer, 4-burner stove, hand blender, regular blender, hand mixer. Mention "kadhai" and "pressure cooker" only if they're genuinely required (no good substitute). Common pots/pans/knives are never flagged.
 - Detect make-ahead steps: anything requiring more than 15 minutes of lead time before active cooking can begin (soaking, marinating, room-temp butter, dough rising). Emit one short sentence; null if not applicable.
 - Detect "pairs well with" sides if the dish is conventionally served with accompaniments. Null if standalone.
-- Compute the "whyPicked" array from the user's active filters (e.g. ["30m", "comforting", "vegetarian"]).
+- "whyPicked" is an array of 2-4 short tags (1-3 words each) derived from the user's active filters. Examples: ["30m", "comforting", "vegetarian"] or ["15m", "eggless", "breakfast"]. Never write full phrases like "total time under 15 minutes" or "South Indian cuisine" — those are too long. Strip filler words; surface the essence.
 - For each ingredient, classify as pantry-staple, likely-available, or specialty based on commonness in Indian kirana/supermarket retail. Set instamart.available to true unless classification is "specialty", in which case false. productId and price are always null in this version.
+- "imageUrl" in the source object MUST always be null. The frontend does not display images in v1. Do not waste effort finding image URLs and do not invent any — just emit null.
 - For each step, parse any explicit duration (e.g. "simmer for 8 minutes") into timerSeconds; otherwise null. Round to nearest 30 seconds.
 - Output ONLY the JSON array — no preamble, no explanation, no markdown fences, no commentary.
 - Output COMPACT JSON (no extra whitespace, no pretty-printing). Keep step text under 200 characters each. Tagline under 12 words. Dietary flag list under 5 items.
@@ -135,10 +138,17 @@ export function buildSearchUserPrompt(filters: SearchFilters): string {
   lines.push(`- Cuisine: ${listOrAny(filters.cuisines, (s) => CUISINE_LABEL[s] ?? s)}`);
   lines.push(`- Diet: ${listOrAny(filters.diet, (s) => DIET_LABEL[s] ?? s)}`);
   lines.push(
-    `- Total time: ${
-      filters.timeMax === null
+    `- Prep time: ${
+      filters.prepMax === null
         ? "no constraint"
-        : `under ${filters.timeMax} minutes`
+        : `under ${filters.prepMax} minutes`
+    }`,
+  );
+  lines.push(
+    `- Cook time: ${
+      filters.cookMax === null
+        ? "no constraint"
+        : `under ${filters.cookMax} minutes`
     }`,
   );
   lines.push(`- Vibe: ${listOrAny(filters.vibes, (s) => VIBE_LABEL[s] ?? s)}`);

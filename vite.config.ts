@@ -8,5 +8,16 @@ export default defineConfig({
   server: {
     host: "0.0.0.0", // expose on LAN so iPhone can test
     port: 5173,
+    // Forward /api/** to the deployed Firebase Hosting URL. Hosting's
+    // rewrite then dispatches to the Cloud Function in asia-south1.
+    // Proxying server-side avoids the CORS headache we'd hit if we just
+    // pointed `VITE_API_BASE` at the function URL directly.
+    proxy: {
+      "/api": {
+        target: "https://recipy-63422.web.app",
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
 });

@@ -6,11 +6,12 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-// Search + alternate-source endpoints use Haiku for ~3x faster output
-// generation than Sonnet. Our Zod validator silently drops any recipe
-// that fails the §9 schema, so an occasional weaker recipe just thins
-// the response — never crashes the request.
-const SEARCH_MODEL = "claude-haiku-4-5";
+// Search + alternate-source endpoints use Sonnet for source-authenticity
+// reliability. Bake-off testing showed Haiku hallucinating source URLs
+// at roughly 30% rate — unacceptable for an app where tapping the source
+// link is a core feature. Sonnet's recipe URLs verified real in every
+// test case. Cost difference is ~$2/month at household-scale usage.
+const SEARCH_MODEL = "claude-sonnet-4-6";
 
 // Recompute + substitutions endpoints stay on Sonnet — small payloads,
 // less frequent calls, and we want strict accuracy on the math.
@@ -47,7 +48,16 @@ export async function callWithWebSearch(opts: {
     tools: [
       { type: "web_search_20250305", name: "web_search", max_uses: 3 },
     ] as unknown as Anthropic.Tool[], // SDK types lag the server-tool schema
-    system: opts.system,
+    // Wrap the system prompt with `cache_control` so identical-prefix
+    // calls within 5 minutes hit Anthropic's prompt cache at $0.30/M
+    // input tokens (vs $3/M for Sonnet). Transparent to model behaviour.
+    system: [
+      {
+        type: "text",
+        text: opts.system,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [{ role: "user", content: opts.user }],
   });
   return extractFinalText(response);
@@ -74,7 +84,15 @@ export async function* streamWithWebSearch(opts: {
     tools: [
       { type: "web_search_20250305", name: "web_search", max_uses: 3 },
     ] as unknown as Anthropic.Tool[],
-    system: opts.system,
+    // Same cache_control on the streaming variant — most hits will land
+    // here since `/api/search-recipes` is the dominant call path.
+    system: [
+      {
+        type: "text",
+        text: opts.system,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [{ role: "user", content: opts.user }],
   });
 
@@ -98,7 +116,15 @@ export async function callPlain(opts: {
   const response = await client.messages.create({
     model: PLAIN_MODEL,
     max_tokens: 1024,
-    system: opts.system,
+    // Same caching for recompute + substitutions. System prompts are
+    // shorter here so savings are tiny, but the change is free.
+    system: [
+      {
+        type: "text",
+        text: opts.system,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [{ role: "user", content: opts.user }],
   });
   return extractFinalText(response);

@@ -1,10 +1,10 @@
 // Screen 1 — Form ("What are we cooking?") — spec §3.
 //
 // Filters live in URL search params so back navigation from Results
-// preserves selections without any local state.
+// preserves selections without local state. Custom chips per section
+// persist in localStorage (see lib/storage.ts).
 
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Sparkles } from "lucide-react";
 import { ChipGroup } from "../components/ChipGroup";
 import { decodeFilters, encodeFilters } from "../lib/filterEncoding";
 import type {
@@ -14,7 +14,8 @@ import type {
   Diet,
   Vibe,
   MainIngredient,
-  TimeMax,
+  PrepMax,
+  CookMax,
 } from "../lib/types";
 
 const MEAL_OPTIONS: { value: Meal; label: string }[] = [
@@ -44,7 +45,14 @@ const DIET_OPTIONS: { value: Diet; label: string }[] = [
   { value: "jain", label: "Jain" },
 ];
 
-const TIME_OPTIONS: { value: string; label: string }[] = [
+const PREP_OPTIONS: { value: string; label: string }[] = [
+  { value: "5", label: "Under 5 min" },
+  { value: "15", label: "Under 15 min" },
+  { value: "30", label: "Under 30 min" },
+  { value: "any", label: "No limit" },
+];
+
+const COOK_OPTIONS: { value: string; label: string }[] = [
   { value: "15", label: "Under 15 min" },
   { value: "30", label: "Under 30 min" },
   { value: "60", label: "Under 60 min" },
@@ -85,103 +93,155 @@ export default function Form() {
   };
 
   const findRecipes = () => {
-    // Pass the current filters through — Results reads from the URL.
     navigate({ pathname: "/results", search: encodeFilters(filters).toString() });
   };
 
   const surpriseMe = () => {
-    // §3: submits with all groups empty + surprise flag.
     const p = new URLSearchParams({ surprise: "true" });
     navigate({ pathname: "/results", search: p.toString() });
   };
 
-  // Time chip selected-value is a string array of length 0 or 1.
-  const timeSelected: string[] =
-    filters.timeMax === null ? [] : [String(filters.timeMax)];
+  // Each single-select group's currently-selected value (length 0 or 1).
+  const prepSelected: string[] =
+    filters.prepMax === null ? [] : [String(filters.prepMax)];
+  const cookSelected: string[] =
+    filters.cookMax === null ? [] : [String(filters.cookMax)];
 
   return (
-    <main className="mx-auto max-w-md px-5 pt-8 pb-12 safe-pt safe-pb">
-      <header className="mb-8">
-        <h1 className="text-title font-bold tracking-tight">
-          What are we cooking?
-        </h1>
-        <p className="mt-1.5 text-body text-ink-muted">
-          Pick what you feel like — or skip everything and tap "Surprise me".
-        </p>
-      </header>
-
-      <div className="flex flex-col gap-7">
-        <ChipGroup
-          label="Meal"
-          options={MEAL_OPTIONS}
-          selected={filters.meal}
-          multi
-          onChange={(next) => update({ meal: next as Meal[] })}
-        />
-        <ChipGroup
-          label="Cuisine"
-          options={CUISINE_OPTIONS}
-          selected={filters.cuisines}
-          multi
-          onChange={(next) => update({ cuisines: next as Cuisine[] })}
-        />
-        <ChipGroup
-          label="Diet"
-          options={DIET_OPTIONS}
-          selected={filters.diet}
-          multi
-          onChange={(next) => update({ diet: next as Diet[] })}
-        />
-        <ChipGroup
-          label="Time available"
-          options={TIME_OPTIONS}
-          selected={timeSelected}
-          multi={false}
-          onChange={(next) => {
-            const v = next[0];
-            const timeMax: TimeMax =
-              v === "any"
-                ? "any"
-                : v === "15" || v === "30" || v === "60"
-                  ? Number(v) as 15 | 30 | 60
-                  : null;
-            update({ timeMax });
-          }}
-        />
-        <ChipGroup
-          label="Vibe"
-          options={VIBE_OPTIONS}
-          selected={filters.vibes}
-          multi
-          onChange={(next) => update({ vibes: next as Vibe[] })}
-        />
-        <ChipGroup
-          label="Main ingredient (optional)"
-          options={MAIN_OPTIONS}
-          selected={filters.mainIngredients}
-          multi
-          onChange={(next) =>
-            update({ mainIngredients: next as MainIngredient[] })
-          }
-        />
+    <>
+      {/* Sticky top header — pins the title + "surprise me" link as you scroll.
+          Tighter top inset than other pages since the header now stays in view. */}
+      <div
+        className="sticky top-0 z-20 bg-paper/60 backdrop-blur-lg"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 20px)" }}
+      >
+        <header className="mx-auto max-w-md px-5 pb-2">
+          <h1 className="text-title">What are we cooking?</h1>
+          <p className="mt-2 text-body text-ink-muted">
+            Tap a few things to find recipes, or{" "}
+            <button
+              type="button"
+              onClick={surpriseMe}
+              className="focus-ring rounded text-ink underline decoration-accent decoration-2 underline-offset-4 hover:text-accent"
+            >
+              surprise me
+            </button>
+            .
+          </p>
+        </header>
       </div>
 
-      <div className="mt-10 flex flex-col items-center gap-4">
-        <button
-          type="button"
-          className="btn-primary focus-ring"
-          onClick={findRecipes}
+      <main className="mx-auto max-w-md px-5 pt-6 pb-32">
+        <div className="flex flex-col gap-10">
+          <ChipGroup
+            id="meal"
+            label="Meal"
+            options={MEAL_OPTIONS}
+            selected={filters.meal}
+            multi
+            allowAdd
+            onChange={(next) => update({ meal: next as Meal[] })}
+          />
+          <ChipGroup
+            id="cuisine"
+            label="Cuisine"
+            options={CUISINE_OPTIONS}
+            selected={filters.cuisines}
+            multi
+            allowAdd
+            onChange={(next) => update({ cuisines: next as Cuisine[] })}
+          />
+          <ChipGroup
+            id="diet"
+            label="Diet"
+            options={DIET_OPTIONS}
+            selected={filters.diet}
+            multi
+            allowAdd
+            onChange={(next) => update({ diet: next as Diet[] })}
+          />
+          <ChipGroup
+            id="prep"
+            label="Prep time"
+            options={PREP_OPTIONS}
+            selected={prepSelected}
+            multi={false}
+            onChange={(next) => {
+              const v = next[0];
+              const prepMax: PrepMax =
+                v === "any"
+                  ? "any"
+                  : v === "5" || v === "15" || v === "30"
+                    ? (Number(v) as 5 | 15 | 30)
+                    : null;
+              update({ prepMax });
+            }}
+          />
+          <ChipGroup
+            id="cook"
+            label="Cook time"
+            options={COOK_OPTIONS}
+            selected={cookSelected}
+            multi={false}
+            onChange={(next) => {
+              const v = next[0];
+              const cookMax: CookMax =
+                v === "any"
+                  ? "any"
+                  : v === "15" || v === "30" || v === "60"
+                    ? (Number(v) as 15 | 30 | 60)
+                    : null;
+              update({ cookMax });
+            }}
+          />
+          <ChipGroup
+            id="vibe"
+            label="Vibe"
+            options={VIBE_OPTIONS}
+            selected={filters.vibes}
+            multi
+            allowAdd
+            onChange={(next) => update({ vibes: next as Vibe[] })}
+          />
+          <ChipGroup
+            id="main"
+            label="Main ingredient"
+            options={MAIN_OPTIONS}
+            selected={filters.mainIngredients}
+            multi
+            allowAdd
+            onChange={(next) =>
+              update({ mainIngredients: next as MainIngredient[] })
+            }
+          />
+        </div>
+      </main>
+
+      {/* Sticky bottom CTA — anchored above iOS home indicator.
+          Translucent + blurred to match the top header, and with a generous
+          bottom buffer so the orange CTA shadow has room to render without
+          getting clipped by Safari's URL chrome. */}
+      <div
+        className="pointer-events-none fixed inset-x-0 z-20"
+        style={{ bottom: 0 }}
+      >
+        {/* Soft fade so scrolling content doesn't cut sharply */}
+        <div className="h-8 bg-gradient-to-t from-paper/60 to-transparent" />
+        <div
+          className="pointer-events-auto bg-paper/60 backdrop-blur-lg"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
         >
-          Find recipes
-        </button>
-        <button
-          type="button"
-          className="focus-ring inline-flex items-center gap-1.5 text-strong text-ink-muted underline underline-offset-4 decoration-ink-disabled"
-          onClick={surpriseMe}
-        >
-          <Sparkles size={14} aria-hidden /> Surprise me
-        </button>
+          <div className="mx-auto max-w-md px-5 pt-2 pb-2">
+            <button
+              type="button"
+              onClick={findRecipes}
+              className="btn-primary focus-ring"
+            >
+              Find recipes
+            </button>
+          </div>
+        </div>
       </div>
-    </main>
+    </>
   );
 }
