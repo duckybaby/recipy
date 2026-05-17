@@ -1,27 +1,33 @@
-// Firestore-backed response cache for /api/search-recipes (spec §8).
+// In-memory response cache for /api/search-recipes.
 //
-// "Identical filter combos within 1 hour return the cached response. Use
-// Firestore as a simple key-value cache, keyed by hashed filter object."
+// Backed by a Map inside the warm function instance. Cloud Run will keep
+// instances around for ~15 min of idleness, so repeat queries within that
+// window get the cache; cold starts and second-instance traffic miss it.
+// That's fine — the cache is a cost optimisation, not a correctness
+// requirement.
 //
-// We use Firestore (not Memorystore) because functions are stateless and
-// scale to zero; a tiny KV in Firestore is free at our volume and survives
-// cold starts.
+// We avoid Firestore here on purpose: the project's Firestore database
+// isn't provisioned, and trying to write to it returns NOT_FOUND. The
+// retrying writes left dangling promises that Cloud Run interpreted as
+// unfinished work, which truncated streaming responses on the client
+// side (real user impact). If/when we add saved-recipes or a feedback
+// dashboard, that can come back as Firestore — but the search cache
+// has no reason to be durable.
 
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { createHash } from "node:crypto";
 import type { Recipe, SearchFilters } from "./validation";
 
-const COLLECTION = "search-cache";
 const TTL_MS = 60 * 60 * 1000; // 1 hour
+const MAX_ENTRIES = 200; // bound memory; oldest entries get evicted
 
-type CacheDoc = {
-  key: string;
+type CacheEntry = {
   recipes: Recipe[];
-  createdAt: FirebaseFirestore.Timestamp;
-  filtersJson: string; // debugging aid; not used for lookup
+  expiresAt: number;
 };
 
-/** Stable hash of the filter object, ignoring key order. */
+const store = new Map<string, CacheEntry>();
+
+/** Stable hash of the filter object, ignoring key order. Used as the key. */
 export function hashFilters(filters: SearchFilters): string {
   const canonical = {
     meal: [...filters.meal].sort(),
@@ -43,22 +49,17 @@ export function hashFilters(filters: SearchFilters): string {
 export async function readCache(
   filters: SearchFilters,
 ): Promise<Recipe[] | null> {
-  // Surprise mode skips cache — point of "surprise me" is variety.
+  // Surprise mode skips cache — the point of "surprise me" is variety.
   if (filters.surprise) return null;
 
   const key = hashFilters(filters);
-  try {
-    const snap = await getFirestore().collection(COLLECTION).doc(key).get();
-    if (!snap.exists) return null;
-    const doc = snap.data() as CacheDoc;
-    const ageMs = Date.now() - doc.createdAt.toMillis();
-    if (ageMs > TTL_MS) return null;
-    return doc.recipes;
-  } catch (err) {
-    // Cache failures should never break the request.
-    console.warn("cache.readCache failed", err);
+  const entry = store.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    store.delete(key);
     return null;
   }
+  return entry.recipes;
 }
 
 export async function writeCache(
@@ -68,37 +69,38 @@ export async function writeCache(
   if (filters.surprise) return;
   if (recipes.length === 0) return; // don't cache empty responses
 
-  const key = hashFilters(filters);
-  try {
-    await getFirestore()
-      .collection(COLLECTION)
-      .doc(key)
-      .set({
-        key,
-        recipes,
-        createdAt: FieldValue.serverTimestamp(),
-        filtersJson: JSON.stringify(filters),
-      });
-  } catch (err) {
-    console.warn("cache.writeCache failed", err);
+  // Evict the oldest entry if we've grown past the bound. The Map's
+  // iteration order is insertion order, so the first key is the oldest.
+  if (store.size >= MAX_ENTRIES) {
+    const oldest = store.keys().next().value;
+    if (oldest !== undefined) store.delete(oldest);
   }
+
+  const key = hashFilters(filters);
+  store.set(key, {
+    recipes,
+    expiresAt: Date.now() + TTL_MS,
+  });
 }
 
 /**
- * Append a feedback event to Firestore. v2 will use these to learn source
- * quality. v1 just stores them.
+ * Record a feedback event. In v1 we don't have a place to store these
+ * durably yet (Firestore is unprovisioned, and the schema's TBD), so
+ * for now we structured-log to Cloud Logging — every event is preserved
+ * there and we can BigQuery them later if we want to train on them.
  */
 export async function logFeedback(
   recipeId: string,
   reason: string,
 ): Promise<void> {
-  try {
-    await getFirestore().collection("feedback").add({
+  // Structured log so Cloud Logging indexes the fields. Easy to query
+  // later via Logs Explorer (`jsonPayload.recipeId="..."`).
+  console.log(
+    JSON.stringify({
+      type: "feedback",
       recipeId,
       reason,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-  } catch (err) {
-    console.warn("cache.logFeedback failed", err);
-  }
+      at: new Date().toISOString(),
+    }),
+  );
 }
