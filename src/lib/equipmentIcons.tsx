@@ -34,11 +34,11 @@ import {
   Timer01Icon,
   WhiskIcon,
 } from "@hugeicons/core-free-icons";
-import type { IconSvgObject } from "@hugeicons/react";
+import type { IconSvgElement } from "@hugeicons/react";
 
 interface Entry {
   match: string[]; // substrings checked against the normalized name
-  icon: IconSvgObject;
+  icon: IconSvgElement;
 }
 
 // Order matters — first match wins, so put more-specific entries above
@@ -77,7 +77,7 @@ const ENTRIES: Entry[] = [
 ];
 
 /** Find the best HugeIcons icon for an equipment label. */
-export function iconFor(name: string): IconSvgObject {
+export function iconFor(name: string): IconSvgElement {
   const n = name.trim().toLowerCase();
   for (const entry of ENTRIES) {
     if (entry.match.some((m) => n.includes(m))) return entry.icon;

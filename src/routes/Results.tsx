@@ -252,8 +252,9 @@ export default function Results() {
 
       {/* Regenerate overlay — opaque loader on top of the existing card area
           so the cards don't flicker mid-swap. Sits below the top bar so the
-          user can still cancel/back. */}
-      {showOverlayLoader && phase.kind !== "initial" && (
+          user can still cancel/back. `showOverlayLoader` already implies
+          phase is "regenerating" or "ready" — never "initial". */}
+      {showOverlayLoader && (
         <div
           className="fixed inset-x-0 bottom-0 z-10 bg-paper"
           style={{

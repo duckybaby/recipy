@@ -113,13 +113,14 @@ export default function Recipe() {
   // The title (and the layoutId on the H1) is locked to whatever recipe
   // we first landed on. When the user finds an alternate, only the body
   // content swaps — the title stays the same so the page still reads as
-  // "this dish" even though the source changed.
-  const [originalTitle, setOriginalTitle] = useState<string | null>(
-    initialRecipe?.title ?? null,
-  );
-  const [originalRecipeId, setOriginalRecipeId] = useState<string | null>(
+  // "this dish" even though the source changed. We store as refs since
+  // they're write-once at mount and we don't need re-renders on them.
+  const originalTitleRef = useRef<string | null>(initialRecipe?.title ?? null);
+  const originalRecipeIdRef = useRef<string | null>(
     initialRecipe?.id ?? null,
   );
+  const originalTitle = originalTitleRef.current;
+  const originalRecipeId = originalRecipeIdRef.current;
   // The recipe we were viewing immediately before the user tapped
   // "Find alternate". Used to render the "Alternate recipe · compare
   // with previous" affordance.

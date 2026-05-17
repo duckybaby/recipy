@@ -5,7 +5,7 @@ import {
   useNavigationType,
   type NavigationType,
 } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { UserContextProvider } from "./hooks/useUserContext";
 import { ResumeBanner } from "./components/ResumeBanner";
 import { ScrollToTop } from "./components/ScrollToTop";
@@ -41,11 +41,25 @@ export default function App() {
  * navigations and other back-navs unmount instantly (no flash), letting
  * each route's own entry animation carry the choreography.
  */
+// Variants are defined outside the component so the function references
+// stay stable across renders. `exit` is a function of the `custom` prop —
+// `captured` is whatever was passed to AnimatePresence's `custom` at
+// unmount time. We only slide off the right when the user is going back
+// (POP) AND the route being unmounted is a Recipe page; everything else
+// unmounts instantly (no exit translate).
+const routeVariants: Variants = {
+  enter: { x: 0 },
+  exit: (custom: { navType: NavigationType; isRecipe: boolean }) => ({
+    x: custom.navType === "POP" && custom.isRecipe ? "100%" : 0,
+  }),
+};
+
 function AnimatedRoutes() {
   const location = useLocation();
   const navType = useNavigationType();
   const pathname = location.pathname;
   const isRecipe = pathname.startsWith("/recipe/");
+  const customExit = { navType, isRecipe };
 
   return (
     // mode="wait" — the exiting route fully completes its animation
@@ -54,16 +68,14 @@ function AnimatedRoutes() {
     // position:absolute and collapsed to content width), producing the
     // "both pages shrunk" visual on back nav. With "wait" you see Recipe
     // slide cleanly off-right, then Results appears.
-    <AnimatePresence mode="wait" custom={navType}>
+    <AnimatePresence mode="wait" custom={customExit}>
       <motion.div
         key={pathname}
-        // Exit only animates on POP from a Recipe page — iOS-style slide
-        // off the right. Captured at render time so when this motion.div
-        // unmounts, it knows whether it was a Recipe page.
-        exit={(captured: NavigationType) =>
-          captured === "POP" && isRecipe ? { x: "100%" } : { x: 0 }
-        }
-        custom={navType}
+        variants={routeVariants}
+        initial="enter"
+        animate="enter"
+        exit="exit"
+        custom={customExit}
         transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
       >
         <Routes location={location}>
