@@ -210,10 +210,16 @@ app.post(
 
     console.log(`search streamed ${collected.length} valid recipes`);
 
-    // 3) Cache the full result (fire and forget — don't block the end).
-    void writeCache(filters, collected);
+    // Close the response to the client first so they see results
+    // immediately. The cache write happens AFTER res.end() but BEFORE the
+    // handler returns — Cloud Run keeps the instance alive until the
+    // handler resolves, so we don't leak a dangling promise (the cause of
+    // the earlier truncated-response bug). Errors inside writeCache are
+    // already caught and logged; they can't surface to the user.
     writeLine({ type: "done", count: collected.length, cached: false });
-    return res.end();
+    res.end();
+    await writeCache(filters, collected);
+    return;
   }),
 );
 

@@ -1,33 +1,55 @@
-// In-memory response cache for /api/search-recipes.
+// Response cache for /api/search-recipes — two-layer.
 //
-// Backed by a Map inside the warm function instance. Cloud Run will keep
-// instances around for ~15 min of idleness, so repeat queries within that
-// window get the cache; cold starts and second-instance traffic miss it.
-// That's fine — the cache is a cost optimisation, not a correctness
-// requirement.
+// 1) Hot path: an in-memory Map inside the warm function instance. ~50 ns
+//    reads, no network round-trip. Bounded at 50 entries with insertion-
+//    order eviction.
+// 2) Persistent path: the `recipy-cache` Firestore database in asia-south1
+//    (same region as the function). Survives cold starts and instance
+//    spin-down; the same query from any device hits it.
 //
-// We avoid Firestore here on purpose: the project's Firestore database
-// isn't provisioned, and trying to write to it returns NOT_FOUND. The
-// retrying writes left dangling promises that Cloud Run interpreted as
-// unfinished work, which truncated streaming responses on the client
-// side (real user impact). If/when we add saved-recipes or a feedback
-// dashboard, that can come back as Firestore — but the search cache
-// has no reason to be durable.
+// On read we check memory first, fall through to Firestore, and backfill
+// memory with anything we found. On write we update memory immediately
+// and Firestore after — callers `await` the write before returning so
+// there's no fire-and-forget promise outliving the handler. The earlier
+// truncated-response bug was exactly that: dangling Firestore writes
+// against an unprovisioned database that Cloud Run treated as still-
+// pending work.
+//
+// We point at the NAMED database "recipy-cache" rather than (default) —
+// the project's default database isn't provisioned. firebase-admin's
+// `getFirestore(databaseId)` selects the named one.
+//
+// `logFeedback` writes to the same Firestore project under `feedback` so
+// the events are queryable, with a structured-log mirror so we never lose
+// an event if Firestore is temporarily unavailable.
 
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { createHash } from "node:crypto";
 import type { Recipe, SearchFilters } from "./validation";
 
+const DATABASE_ID = "recipy-cache";
+const SEARCH_COLLECTION = "search-cache";
+const FEEDBACK_COLLECTION = "feedback";
+
 const TTL_MS = 60 * 60 * 1000; // 1 hour
-const MAX_ENTRIES = 200; // bound memory; oldest entries get evicted
+const MAX_MEM_ENTRIES = 50;
 
 type CacheEntry = {
   recipes: Recipe[];
-  expiresAt: number;
+  expiresAt: number; // epoch ms
 };
 
-const store = new Map<string, CacheEntry>();
+const memCache = new Map<string, CacheEntry>();
 
-/** Stable hash of the filter object, ignoring key order. Used as the key. */
+// Lazy Firestore handle so the SDK only initialises on first use (cheap
+// cold-start optimisation). The named-database call is `getFirestore(id)`.
+let dbHandle: FirebaseFirestore.Firestore | null = null;
+function db(): FirebaseFirestore.Firestore {
+  if (!dbHandle) dbHandle = getFirestore(DATABASE_ID);
+  return dbHandle;
+}
+
+/** Stable hash of the filter object, ignoring key order. Cache key. */
 export function hashFilters(filters: SearchFilters): string {
   const canonical = {
     meal: [...filters.meal].sort(),
@@ -53,13 +75,42 @@ export async function readCache(
   if (filters.surprise) return null;
 
   const key = hashFilters(filters);
-  const entry = store.get(key);
-  if (!entry) return null;
-  if (entry.expiresAt < Date.now()) {
-    store.delete(key);
+
+  // Hot layer first.
+  const mem = memCache.get(key);
+  if (mem) {
+    if (mem.expiresAt > Date.now()) return mem.recipes;
+    memCache.delete(key);
+  }
+
+  // Persistent layer.
+  try {
+    const snap = await db().collection(SEARCH_COLLECTION).doc(key).get();
+    if (!snap.exists) return null;
+    const data = snap.data() as
+      | {
+          recipes?: Recipe[];
+          createdAt?: FirebaseFirestore.Timestamp;
+        }
+      | undefined;
+    if (!data?.recipes || !data?.createdAt) return null;
+
+    const ageMs = Date.now() - data.createdAt.toMillis();
+    if (ageMs > TTL_MS) return null;
+
+    // Backfill the hot layer so the next read on this instance is local.
+    memCache.set(key, {
+      recipes: data.recipes,
+      expiresAt: Date.now() + (TTL_MS - ageMs),
+    });
+    evictMemIfFull();
+    return data.recipes;
+  } catch (err) {
+    // Cache failures must never break the request — fall through to a
+    // fresh search.
+    console.warn("cache.readCache failed", err);
     return null;
   }
-  return entry.recipes;
 }
 
 export async function writeCache(
@@ -67,40 +118,55 @@ export async function writeCache(
   recipes: Recipe[],
 ): Promise<void> {
   if (filters.surprise) return;
-  if (recipes.length === 0) return; // don't cache empty responses
-
-  // Evict the oldest entry if we've grown past the bound. The Map's
-  // iteration order is insertion order, so the first key is the oldest.
-  if (store.size >= MAX_ENTRIES) {
-    const oldest = store.keys().next().value;
-    if (oldest !== undefined) store.delete(oldest);
-  }
+  if (recipes.length === 0) return;
 
   const key = hashFilters(filters);
-  store.set(key, {
-    recipes,
-    expiresAt: Date.now() + TTL_MS,
-  });
+
+  // Write the hot layer first — synchronous, can't fail.
+  memCache.set(key, { recipes, expiresAt: Date.now() + TTL_MS });
+  evictMemIfFull();
+
+  // Persistent layer. Callers await this so we don't leave a dangling
+  // promise after `res.end()`.
+  try {
+    await db().collection(SEARCH_COLLECTION).doc(key).set({
+      recipes,
+      createdAt: FieldValue.serverTimestamp(),
+      filtersJson: JSON.stringify(filters), // debugging aid; not used for lookup
+    });
+  } catch (err) {
+    console.warn("cache.writeCache failed", err);
+  }
+}
+
+function evictMemIfFull(): void {
+  if (memCache.size <= MAX_MEM_ENTRIES) return;
+  const oldestKey = memCache.keys().next().value;
+  if (oldestKey !== undefined) memCache.delete(oldestKey);
 }
 
 /**
- * Record a feedback event. In v1 we don't have a place to store these
- * durably yet (Firestore is unprovisioned, and the schema's TBD), so
- * for now we structured-log to Cloud Logging — every event is preserved
- * there and we can BigQuery them later if we want to train on them.
+ * Log a feedback event. v1 stores it in Firestore under `feedback` so we
+ * can query it later (source quality signal, post-mortem on bad recipes).
+ * A structured `console.log` mirrors the same payload so events are never
+ * lost even if Firestore is briefly unavailable — Cloud Logging captures
+ * everything.
  */
 export async function logFeedback(
   recipeId: string,
   reason: string,
 ): Promise<void> {
-  // Structured log so Cloud Logging indexes the fields. Easy to query
-  // later via Logs Explorer (`jsonPayload.recipeId="..."`).
-  console.log(
-    JSON.stringify({
-      type: "feedback",
+  const at = new Date().toISOString();
+
+  console.log(JSON.stringify({ type: "feedback", recipeId, reason, at }));
+
+  try {
+    await db().collection(FEEDBACK_COLLECTION).add({
       recipeId,
       reason,
-      at: new Date().toISOString(),
-    }),
-  );
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn("cache.logFeedback failed", err);
+  }
 }
