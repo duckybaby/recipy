@@ -99,6 +99,22 @@ function asyncHandler(
   };
 }
 
+/** Normalise a URL to host+path for cross-call equality checks. Strips
+ *  query strings, hash fragments, and trailing slashes — Claude occasionally
+ *  appends `?utm=...` or rounds a trailing slash differently on a re-search,
+ *  which would otherwise count as a "different" URL. Returns null if the
+ *  input isn't a parseable URL. */
+function normaliseUrlKey(input: string): string | null {
+  try {
+    const u = new URL(input);
+    let path = u.pathname.replace(/\/+$/, "");
+    if (path === "") path = "/";
+    return `${u.hostname.toLowerCase()}${path}`;
+  } catch {
+    return null;
+  }
+}
+
 // ----- /api/search-recipes -----
 
 // /api/search-recipes — STREAMING NDJSON RESPONSE
@@ -222,9 +238,23 @@ app.post(
 
     const raw = parseJsonLoose<unknown[]>(text);
     const arr = Array.isArray(raw) ? raw : [raw];
+    // Normalise excluded URLs once so we can compare hostname + pathname
+    // (ignoring trailing slashes / query strings) — Claude occasionally
+    // appends ?utm=... or strips a trailing slash on the second look.
+    const excludedKeys = new Set(
+      excludeUrls.map(normaliseUrlKey).filter((k) => k !== null) as string[],
+    );
     for (const item of arr) {
       const valid = safeParseRecipe(reIdRecipe(item));
-      if (valid) return res.json({ recipe: valid });
+      if (!valid) continue;
+      const key = normaliseUrlKey(valid.source.url);
+      if (key && excludedKeys.has(key)) {
+        console.warn(
+          `alternate source matched an excluded URL: ${valid.source.url} — rejecting`,
+        );
+        continue;
+      }
+      return res.json({ recipe: valid });
     }
     return res
       .status(404)

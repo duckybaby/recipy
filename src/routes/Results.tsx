@@ -109,7 +109,12 @@ export default function Results() {
   // CardList so the stagger entry animation replays for fresh cards but
   // stays stable for back-nav.
   const [batchKey, setBatchKey] = useState(0);
-  const [toastVisible, setToastVisible] = useState(false);
+  // Toast carries both message and tone so we can use the same component for
+  // success ("New recipes found!") and failure ("Couldn't find anything else").
+  const [toast, setToast] = useState<{
+    message: string;
+    variant: "success" | "info";
+  } | null>(null);
 
   // Strict Mode runs the mount effect twice in dev — this ref keeps the
   // intent consumption (and the fetch) idempotent.
@@ -174,8 +179,16 @@ export default function Results() {
       setBatchKey((k) => k + 1);
       setPhase({ kind: "ready" });
       if (mode === "regenerate") {
-        setToastVisible(true);
-        window.setTimeout(() => setToastVisible(false), TOAST_MS);
+        // Distinguish "found new recipes" from "ran but came up empty" —
+        // both used to share the green success toast.
+        const message =
+          recipes.length > 0
+            ? "New recipes found!"
+            : "Couldn't find anything new — try different filters?";
+        const variant: "success" | "info" =
+          recipes.length > 0 ? "success" : "info";
+        setToast({ message, variant });
+        window.setTimeout(() => setToast(null), TOAST_MS);
       }
     } catch (err) {
       if (ctrl.signal.aborted) return;
@@ -276,7 +289,11 @@ export default function Results() {
         />
       </div>
 
-      <Toast message="New recipes found!" visible={toastVisible} />
+      <Toast
+        message={toast?.message ?? ""}
+        variant={toast?.variant ?? "success"}
+        visible={toast !== null}
+      />
 
       <main
         className="mx-auto max-w-md px-5 pt-2"
@@ -384,7 +401,15 @@ function CardList({
   );
 }
 
-function Toast({ message, visible }: { message: string; visible: boolean }) {
+function Toast({
+  message,
+  variant,
+  visible,
+}: {
+  message: string;
+  variant: "success" | "info";
+  visible: boolean;
+}) {
   // Track mount lifecycle so the toast can animate both in and out cleanly.
   const [mounted, setMounted] = useState(visible);
   const timeoutRef = useRef<number | null>(null);
@@ -402,6 +427,13 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
 
   if (!mounted) return null;
 
+  // Green frosted for success, dark ink for "tried and didn't find anything".
+  // Same shape; the colour swap is the only signal we use to differentiate.
+  const background =
+    variant === "success"
+      ? "rgba(45, 106, 79, 0.55)"
+      : "rgba(28, 28, 28, 0.75)";
+
   return (
     <div
       role="status"
@@ -415,7 +447,7 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
     >
       <div
         className="rounded-button px-4 py-3 text-center text-strong font-medium text-paper shadow-soft backdrop-blur-lg"
-        style={{ background: "rgba(45, 106, 79, 0.55)" }}
+        style={{ background }}
       >
         {message}
       </div>
