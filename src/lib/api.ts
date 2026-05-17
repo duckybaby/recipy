@@ -71,6 +71,7 @@ async function searchRecipesStream(
   filters: SearchFilters,
   onRecipe: (recipe: Recipe) => void,
   signal?: AbortSignal,
+  options?: { skipCache?: boolean },
 ): Promise<{ recipes: Recipe[]; cached: boolean }> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -78,10 +79,18 @@ async function searchRecipesStream(
   const appCheckToken = await getAppCheckToken();
   if (appCheckToken) headers["X-Firebase-AppCheck"] = appCheckToken;
 
+  // skipCache lives at the body root, not inside `filters`, so it doesn't
+  // contribute to the backend's cache hash. Regenerate sets this so the
+  // backend bypasses the cache read but still writes the result afterwards.
+  const body =
+    options?.skipCache === true
+      ? { ...filters, skipCache: true }
+      : filters;
+
   const res = await fetch(`${API_BASE}/api/search-recipes`, {
     method: "POST",
     headers,
-    body: JSON.stringify(filters),
+    body: JSON.stringify(body),
     signal,
   });
 

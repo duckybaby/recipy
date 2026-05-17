@@ -31,7 +31,14 @@ const DATABASE_ID = "recipy-cache";
 const SEARCH_COLLECTION = "search-cache";
 const FEEDBACK_COLLECTION = "feedback";
 
-const TTL_MS = 60 * 60 * 1000; // 1 hour
+// 7 days. Recipes don't go stale on the timescale that matters here —
+// source pages rarely change content meaningfully day-to-day. A longer
+// TTL means the same filter combo within a week stays cached, which
+// drops Anthropic spend dramatically (most household repeat queries
+// land in the same combo bucket). When the M2 library work lands and
+// recipes become per-recipe docs queryable by tag, this TTL stops
+// mattering — the library is permanent.
+const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_MEM_ENTRIES = 50;
 
 type CacheEntry = {

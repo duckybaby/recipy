@@ -12,7 +12,11 @@
 import type { SearchFilters } from "./types";
 
 function prettify(s: string): string {
-  return s
+  // User-added custom chips arrive as "custom:high protein" — drop the
+  // prefix before the dash-split / title-case so the strip reads cleanly
+  // as "High protein" rather than "Custom:high Protein".
+  const stripped = s.startsWith("custom:") ? s.slice("custom:".length) : s;
+  return stripped
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");

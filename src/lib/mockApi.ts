@@ -34,6 +34,7 @@ async function searchRecipesStream(
   _filters: SearchFilters,
   onRecipe: (recipe: Recipe) => void,
   signal?: AbortSignal,
+  _options?: { skipCache?: boolean },
 ): Promise<{ recipes: Recipe[]; cached: boolean }> {
   const recipes = freshMockRecipes();
   const out: Recipe[] = [];

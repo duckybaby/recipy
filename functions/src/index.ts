@@ -131,6 +131,16 @@ function normaliseUrlKey(input: string): string | null {
 app.post(
   "/api/search-recipes",
   asyncHandler(async (req, res) => {
+    // `skipCache: true` tells us to bypass the read path entirely —
+    // regenerate uses this so "give me other recipes" actually fetches
+    // fresh ones instead of returning the same cached batch. We still
+    // write to cache afterwards so subsequent fresh searches benefit.
+    // Read at the body level (not part of SearchFilters) because including
+    // it in the filters would change the cache hash and defeat caching
+    // for normal calls. Zod strips unknown fields by default, so the
+    // following safeParse won't choke on it.
+    const skipCache = req.body?.skipCache === true;
+
     const parsed = SearchFiltersSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -150,8 +160,9 @@ app.post(
       res.write(JSON.stringify(obj) + "\n");
     };
 
-    // 1) Cache check — emit immediately if hit.
-    const cached = await readCache(filters);
+    // 1) Cache check — emit immediately if hit. Regenerate paths pass
+    // skipCache so they always go to Claude.
+    const cached = skipCache ? null : await readCache(filters);
     if (cached) {
       console.log(`cache hit: ${cached.length} recipes`);
       for (const recipe of cached) {

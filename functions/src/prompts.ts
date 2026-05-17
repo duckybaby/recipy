@@ -121,6 +121,18 @@ const VIBE_LABEL: Record<string, string> = {
   impressive: "impressive",
 };
 
+/** Resolve a filter value to natural language for the prompt. Canonical
+ *  enum values use the LABEL map; user-added "custom:high protein" entries
+ *  drop the prefix so Claude sees plain "high protein". Falls back to the
+ *  raw value otherwise. */
+function resolveLabel(
+  value: string,
+  labels: Record<string, string>,
+): string {
+  if (value.startsWith("custom:")) return value.slice("custom:".length);
+  return labels[value] ?? value;
+}
+
 function listOrAny(items: string[], label: (s: string) => string): string {
   if (items.length === 0) return "any";
   return items.map(label).join(", ");
@@ -142,9 +154,9 @@ export function buildSearchUserPrompt(filters: SearchFilters): string {
 
   const lines: string[] = [];
   lines.push("Find exactly 3 real recipes matching ALL of these filters:");
-  lines.push(`- Meal: ${listOrAny(filters.meal, (s) => MEAL_LABEL[s] ?? s)}`);
-  lines.push(`- Cuisine: ${listOrAny(filters.cuisines, (s) => CUISINE_LABEL[s] ?? s)}`);
-  lines.push(`- Diet: ${listOrAny(filters.diet, (s) => DIET_LABEL[s] ?? s)}`);
+  lines.push(`- Meal: ${listOrAny(filters.meal, (s) => resolveLabel(s, MEAL_LABEL))}`);
+  lines.push(`- Cuisine: ${listOrAny(filters.cuisines, (s) => resolveLabel(s, CUISINE_LABEL))}`);
+  lines.push(`- Diet: ${listOrAny(filters.diet, (s) => resolveLabel(s, DIET_LABEL))}`);
   lines.push(
     `- Prep time: ${
       filters.prepMax === null
@@ -159,12 +171,14 @@ export function buildSearchUserPrompt(filters: SearchFilters): string {
         : `under ${filters.cookMax} minutes`
     }`,
   );
-  lines.push(`- Vibe: ${listOrAny(filters.vibes, (s) => VIBE_LABEL[s] ?? s)}`);
+  lines.push(`- Vibe: ${listOrAny(filters.vibes, (s) => resolveLabel(s, VIBE_LABEL))}`);
   lines.push(
     `- Main ingredient: ${
       filters.mainIngredients.length === 0
         ? "any"
-        : filters.mainIngredients.join(", ")
+        : filters.mainIngredients
+            .map((s) => (s.startsWith("custom:") ? s.slice("custom:".length) : s))
+            .join(", ")
     }`,
   );
 

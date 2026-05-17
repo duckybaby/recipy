@@ -159,6 +159,9 @@ export default function Results() {
             if (!ctrl.signal.aborted) setStreamed((n) => n + 1);
           },
           ctrl.signal,
+          // Regenerate bypasses the backend cache so the user actually
+          // gets different recipes, not the same batch we cached last time.
+          { skipCache: mode === "regenerate" },
         );
         if (ctrl.signal.aborted) return;
         recipes = fetched;

@@ -8,8 +8,30 @@ import { z } from "zod";
 
 // ----- Filter payload (request body for /api/search-recipes) -----
 
-const MealEnum = z.enum(["breakfast", "lunch", "dinner", "snack", "dessert"]);
-const CuisineEnum = z.enum([
+// Each chip group also accepts user-added entries with a "custom:" prefix
+// (e.g. "custom:high protein" for a vibe, "custom:korean" for a cuisine).
+// We accept those alongside the canonical enums so the schema doesn't
+// reject the user's own additions — the frontend strips the prefix for
+// display, and the prompt builder feeds them to Claude as natural-language
+// hints.
+function enumOrCustom<T extends string>(canonical: readonly T[]) {
+  const set = new Set<string>(canonical);
+  return z.string().refine(
+    (val) => set.has(val) || /^custom:.+/.test(val),
+    (val) => ({
+      message: `Expected one of [${canonical.join(", ")}] or "custom:<value>"; received "${val}"`,
+    }),
+  );
+}
+
+const MealField = enumOrCustom([
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+  "dessert",
+] as const);
+const CuisineField = enumOrCustom([
   "south-indian",
   "north-indian",
   "chinese",
@@ -18,9 +40,15 @@ const CuisineEnum = z.enum([
   "thai",
   "mexican",
   "middle-eastern",
-]);
-const DietEnum = z.enum(["vegetarian", "non-veg", "eggless", "vegan", "jain"]);
-const VibeEnum = z.enum([
+] as const);
+const DietField = enumOrCustom([
+  "vegetarian",
+  "non-veg",
+  "eggless",
+  "vegan",
+  "jain",
+] as const);
+const VibeField = enumOrCustom([
   "comforting",
   "light",
   "spicy",
@@ -28,8 +56,8 @@ const VibeEnum = z.enum([
   "healthy",
   "indulgent",
   "impressive",
-]);
-const MainIngredientEnum = z.enum([
+] as const);
+const MainIngredientField = enumOrCustom([
   "chicken",
   "paneer",
   "fish",
@@ -39,7 +67,7 @@ const MainIngredientEnum = z.enum([
   "rice",
   "lentils",
   "tofu",
-]);
+] as const);
 
 // Single-select prep/cook max time. Frontend collapses "any" → null
 // before sending (both mean "no constraint").
@@ -57,13 +85,13 @@ const CookMaxSchema = z.union([
 ]);
 
 export const SearchFiltersSchema = z.object({
-  meal: z.array(MealEnum).default([]),
-  cuisines: z.array(CuisineEnum).default([]),
-  diet: z.array(DietEnum).default([]),
+  meal: z.array(MealField).default([]),
+  cuisines: z.array(CuisineField).default([]),
+  diet: z.array(DietField).default([]),
   prepMax: PrepMaxSchema.default(null),
   cookMax: CookMaxSchema.default(null),
-  vibes: z.array(VibeEnum).default([]),
-  mainIngredients: z.array(MainIngredientEnum).default([]),
+  vibes: z.array(VibeField).default([]),
+  mainIngredients: z.array(MainIngredientField).default([]),
   surprise: z.boolean().default(false),
   similarTo: z.string().optional(),
 });
