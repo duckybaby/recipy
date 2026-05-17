@@ -55,6 +55,7 @@ Full stack table in [`docs/architecture.md`](docs/architecture.md).
 | M2 | Anthropic Cloud Function + frontend wiring + App Check | shipped |
 | M2 polish | Recipe redesign (tabs, sticky CTA, kebab), app-like transitions | shipped |
 | M2.1 | State refactor: Zustand store + intent-based loader + alt-recipe history | shipped |
+| M2.5 | Dark mode (Auto/Light/Dark) + closed Firestore rules + per-IP rate limiting + pinch-zoom | shipped |
 | M3 | Cooking mode: offline + wake lock + multi-channel timer alert | next |
 | M4 | Instamart Path B (heuristic cart deep-link) | |
 | M5 | Polish + acceptance criteria + custom domain hardening | |

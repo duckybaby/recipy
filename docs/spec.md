@@ -336,8 +336,8 @@ Tightened during the M2.1 refactor when Claude was over-using the middle level. 
 
 - **Time-to-first-recipe-card** under 4 s on a typical 4G connection. The NDJSON stream emits the first recipe as soon as its closing brace lands; subsequent recipes trickle in over the next ~5 s.
 - **Aggressive frontend caching.** Vite hashes assets; `Cache-Control: immutable` on `/assets/**` (see `firebase.json`).
-- **Backend cache.** Identical filter combos within ~15 minutes of warmth hit an in-memory map in the function. Persistent (Firestore-backed) cache is M5.
-- **Per-IP rate limit on Cloud Functions** — to add in M5; today the cap is whatever App Check + Anthropic's tier-1 quota imposes (~80 search calls/day, plenty for a household).
+- **Backend cache.** Two-layer: in-memory Map inside the function instance + Firestore in the `recipy-cache` named DB. TTL is 7 days. Identical filter combos hit memory in single-digit ms; Firestore hit on cold-start in ~20 ms. Cache misses go to Anthropic.
+- **Per-IP rate limit on Cloud Functions.** `express-rate-limit` v8 with `app.set("trust proxy", 1)`. 10 req/min on every POST endpoint, 30 req/min on `/api/health`. Per-route — each endpoint has its own bucket so a search doesn't compete with a feedback submit. Returns `429` with `RateLimit-*` headers (IETF draft-7) when exceeded.
 - **Error boundaries** on every screen — never show a white screen of death. Render a friendly recovery card with a "Try again" button that retriggers the last request.
 - **iOS Safari private mode degrades gracefully.** `localStorage.setItem` throwing does not crash the app; an in-memory Map fallback covers the session.
 

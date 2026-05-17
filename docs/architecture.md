@@ -6,19 +6,23 @@ The technical map of recipy. For product intent and screen-by-screen behaviour, 
 
 | Layer | Tech | Version |
 |---|---|---|
-| UI | React + Vite + TypeScript | React 19.2, Vite 8.0, TS ~6.0 |
-| Styling | Tailwind CSS v4 with `@theme` tokens | 4.3 |
+| UI | React + Vite + TypeScript | React 19.2, Vite 8.0, TS ~5.6 |
+| Styling | Tailwind CSS v4 with `@theme` tokens + `[data-theme="dark"]` override | 4.3 |
 | Routing | `react-router-dom` | v7.15 |
 | State | Zustand store + thin localStorage adapter | zustand 5.0 |
 | Animation | Framer Motion | 12.38 |
 | Icons | `lucide-react` + `@hugeicons/react` for equipment | 1.16 / 1.1 |
 | Hosting | Firebase Hosting | recipy-63422 |
 | Backend | Firebase Cloud Functions (Express, Node 20, 2nd gen) | in `asia-south1` |
-| API | `@anthropic-ai/sdk` (Sonnet 4.6 + `web_search_20250305`) | 0.40 |
-| Validation | `zod` | 3.23 |
+| API | `@anthropic-ai/sdk` (Sonnet 4.6 + `web_search_20250305`) | 0.96 |
+| Cache | Two-layer — in-memory Map + Firestore (`recipy-cache` named DB) | TTL 7d |
+| Validation | `zod` | 3.x |
+| Rate limit | `express-rate-limit` per-IP, per-route | v8 |
 | Secrets | Firebase Secret Manager | `ANTHROPIC_API_KEY` |
 | Attestation | Firebase App Check (reCAPTCHA v3) | required on every API route |
-| CI | GitHub Actions — auto-deploy on push to `main` | hosting + functions in one run |
+| Firestore rules | Client-side fully closed (admin-SDK bypasses) | see `firestore.rules` |
+| Server runtime | `firebase-functions` v2 onRequest | v7 |
+| CI | GitHub Actions — auto-deploy on push to `main` | hosting + functions + firestore in one run |
 
 ## Routes
 
@@ -82,6 +86,27 @@ The version bump exists because we've changed stored shapes a few times during M
 
 Two reasons: (1) Cooking state, recents, and custom chips are read once on mount by the screen that owns them, so a global subscription is wasteful. (2) Keeping the persist middleware tight (just `filters`, `lastSearch`, `activeRecipe`) means the rehydration payload stays small and the surface area for migration bugs stays small.
 
+## Theming
+
+Two themes ship in v1: the original light "Modern Cookbook" palette and a dark "Warm Charcoal" variant.
+
+The mechanism uses **CSS custom-property cascade only — no `dark:` prefix anywhere in components.** `@theme` defines all tokens (paper, ink, accent, shadows, etc.) at their light values. A `[data-theme="dark"]` selector block in `src/styles/index.css` overrides those same vars with dark values. Tailwind's generated utilities (`bg-paper`, `text-ink`, …) read the vars at use site, so they re-resolve automatically when the attribute flips.
+
+User preference flow:
+
+1. **Persisted** in the Zustand store at `state.theme` — `"light" | "dark" | null`. `null` means "follow the OS" via `prefers-color-scheme`.
+2. **First paint** — an inline `<script>` in `<head>` of `index.html` synchronously reads `localStorage.recipy-store`, resolves the preference, and sets `data-theme` on `<html>` before React mounts. This prevents a white-flash on dark loads. The script mirrors `resolveTheme()` in `store.ts` — keep both in sync if either changes.
+3. **Runtime updates** — `src/main.tsx` subscribes to store changes and calls `applyTheme(resolveTheme(state.theme))` on every flip. It also listens to `matchMedia("(prefers-color-scheme: dark)").change` so a user in Auto mode tracks the OS as they toggle Light/Dark in their system settings.
+4. **`<meta name="theme-color">`** is updated on both first paint and every flip so the iOS Safari chrome tint matches the surface.
+
+The dark accent (`--color-accent: #b63624`) is 15% darker than the light brand red (`#d63f2a`). Lifted accents (we tried `#ff5c44`) read as "neon" against dim paper and broke white-text contrast; darker actually *improved* it. Three tokens introduced specifically for dark mode situations:
+
+- `--color-on-accent` — text on accent fills. Warm off-white (`#fbf5eb`) in both modes.
+- `--color-accent-strong` — lifted red for text/border on `accent-soft` surfaces (chip-selected, pill-info). Same as accent in light, lifted in dark.
+- `--color-accent-soft` — translucent in dark mode (`rgba(182, 54, 36, 0.10)`) so selected chips read as a hint, not a block.
+
+`ThemeToggle` in the Form header cycles Light → Dark → Auto. The store version was bumped 1 → 2 with a migration that wipes `theme` (preserving filters / lastSearch / activeRecipe) so any explicit preference resets to Auto on next load.
+
 ## Loader policy
 
 What surface Results shows is driven by **intent**, not cache presence. Three intents:
@@ -110,12 +135,14 @@ Card → header title morph uses Framer's `layoutId` (`recipe-title-${id}`). Dis
 
 ## Backend
 
-`functions/src/index.ts` is an Express app exported as a 2nd-gen Cloud Function in `asia-south1`. Middleware chain:
+`functions/src/index.ts` is an Express app exported as a 2nd-gen Cloud Function in `asia-south1`. Middleware chain (in order):
 
-1. CORS — explicit allowlist (see [`api.md`](./api.md)).
-2. `express.json({ limit: "1mb" })`.
-3. Request logger (path + method).
-4. `verifyAppCheck` — rejects anything without a valid App Check token. Self-skips `OPTIONS` and `/api/health`.
+1. `app.set("trust proxy", 1)` — read client IP from `X-Forwarded-For` (Cloud Run sits behind Google's LB).
+2. CORS — explicit allowlist (see [`api.md`](./api.md)).
+3. `express.json({ limit: "1mb" })`.
+4. Request logger — `method path ip=<client-ip>`.
+5. `verifyAppCheck` — rejects anything without a valid App Check token. Self-skips `OPTIONS` and `/api/health`.
+6. **Per-route rate limiter** — `writeLimiter` (10/min) on every POST, `readLimiter` (30/min) on `/api/health`. See [§Rate limiting](#rate-limiting).
 
 Each route is wrapped in `asyncHandler` so thrown errors land in the error middleware, which converts them to the canonical `{ error: { code, message } }` envelope.
 
@@ -131,7 +158,37 @@ Each route is wrapped in `asyncHandler` so thrown errors land in the error middl
 
 ### Cache
 
-`functions/src/cache.ts` keys results by a hash of the filter object. v1 uses an in-memory Map inside the function instance. Across cold starts this is empty, so identical queries within ~15 minutes of warmth get the cache; older queries refetch. Persistent (Firestore-backed) cache is on the M5 deferred list.
+`functions/src/cache.ts` keys results by a hash of the filter object. **Two-layer:**
+
+1. **In-memory Map** inside the function instance — capped at 50 entries, insertion-order eviction. Hit returns in single-digit ms.
+2. **Firestore** in the `recipy-cache` named database, collection `search-cache`. Survives cold starts and spreads across instances.
+
+Reads check memory first, fall through to Firestore on miss, and backfill memory on a Firestore hit. Writes update memory synchronously and Firestore via `await writeCache(...)` after `res.end()` — so the client sees the response close immediately while Cloud Run keeps the instance alive long enough to finish the persistent write. TTL is 7 days (an actual TTL field, checked on read). Regenerate paths set `skipCache: true` to bypass the read; the value never enters the filter hash so cache lookups aren't polluted.
+
+### Rate limiting
+
+`express-rate-limit` v8 with per-IP, per-route limiters wired into the Express chain after App Check but before each route handler. Two limiter instances:
+
+- `writeLimiter` — 10 requests / minute on every POST endpoint (`/api/search-recipes`, `/api/find-alternate-source`, `/api/recompute-field`, `/api/get-substitutions`, `/api/feedback`).
+- `readLimiter` — 30 requests / minute on `/api/health`.
+
+Per-route means a search and a feedback submit have separate buckets — they don't compete. A single client's effective ceiling is 10×5 + 30 = 80 req/min, well below anything a real user would do but tight enough to cap cost if a retry loop ever fires.
+
+**`app.set("trust proxy", 1)`** is required for the limiter to work behind Cloud Run's load balancer. Without it, `req.ip` is the LB's address and every request looks like the same client. The request logger now prints `ip=...` so trust-proxy is verifiable from Cloud Run logs.
+
+The limiter's default store is in-memory, so the effective ceiling across N warm Cloud Run instances is N × limit (N ≤ `maxInstances: 10`). Acceptable at one-household scale; if strict ceilings ever matter we'd swap in a Firestore-backed store.
+
+### Firestore rules
+
+`firestore.rules` (at repo root) is fully closed:
+
+```
+allow read, write: if false;
+```
+
+Both collections (`search-cache`, `feedback`) live inside the `recipy-cache` named database. The Cloud Function uses firebase-admin which bypasses these rules. No client code opens a direct Firestore connection. If that ever changes (realtime listeners for a multi-user feature), this is where gates open.
+
+The rules deploy via the same GitHub Actions workflow as hosting + functions, courtesy of the `firestore` block in `firebase.json` and the `--only hosting,functions,firestore` flag on the `firebase deploy` command. Service account requires Cloud Datastore Owner + Firebase Rules Admin in addition to the existing hosting/functions roles.
 
 ### Validation
 
@@ -139,10 +196,10 @@ Each route is wrapped in `asyncHandler` so thrown errors land in the error middl
 
 ## Deployment
 
-GitHub Actions (`.github/workflows/firebase-hosting-merge.yml`) deploys both hosting and functions on every push to `main`:
+GitHub Actions (`.github/workflows/firebase-hosting-merge.yml`) deploys hosting, functions, AND Firestore rules on every push to `main`:
 
 ```bash
-firebase deploy --only hosting,functions --project recipy-63422 --non-interactive --force
+firebase deploy --only hosting,functions,firestore --project recipy-63422 --non-interactive --force
 ```
 
 `--force` auto-applies the Artifact Registry cleanup policy (1-day retention of old container images) so the deploy doesn't error on that non-fatal warning. The same workflow runs `npm ci && npm run build` for the frontend, then `npm ci && npm run build` inside `functions/`.
@@ -172,7 +229,9 @@ recipy/
 ├── README.md
 ├── CHANGELOG.md
 ├── package.json
-├── firebase.json
+├── firebase.json             # hosting + functions + firestore config
+├── firestore.rules           # fully-closed client rules (admin-SDK bypasses)
+├── firestore.indexes.json    # placeholder (no composite indexes in v1)
 ├── vite.config.ts
 ├── .github/workflows/        # auto-deploy on push, preview on PR
 ├── docs/
@@ -197,6 +256,7 @@ recipy/
 │   │   ├── FeedbackSheet.tsx
 │   │   ├── ActionSheet.tsx
 │   │   ├── Loader.tsx       # cooking-themed full-bleed loader
+│   │   ├── ThemeToggle.tsx  # tri-state Light / Dark / Auto cycle
 │   │   ├── PageTransition.tsx
 │   │   ├── ResumeBanner.tsx # M3 stub
 │   │   └── ScrollToTop.tsx

@@ -18,6 +18,25 @@ All error responses share one envelope:
 { "error": { "code": "snake_case_code", "message": "human-readable explanation" } }
 ```
 
+## Rate limits
+
+Per-IP, per-route, in-memory store on the Cloud Function. Headers follow the IETF [draft-7 rate-limit spec](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/) — clients can read `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset`.
+
+| Endpoint family | Limit | Window |
+|---|---|---|
+| `POST /api/*` (all five) | 10 / IP | 60 s |
+| `GET  /api/health` | 30 / IP | 60 s |
+
+Per-route means each POST has its own bucket — a search and a feedback submit don't compete. Single-IP effective ceiling is 80 req/min. Exceeding returns:
+
+```json
+{ "error": { "code": "rate_limited", "message": "Too many requests. Try again in a minute." } }
+```
+
+with status `429`.
+
+In-memory store + `maxInstances: 10` on the function means the effective ceiling is up to 10× the configured limit when traffic spreads across warm instances. Acceptable at one-household scale.
+
 ---
 
 ## POST /api/search-recipes
@@ -216,4 +235,4 @@ The accompanying recovery (refetch, recompute, etc.) is the client's responsibil
 - Recompute + substitutions: Claude Sonnet 4.6, no tools.
 - Why Sonnet for both: Haiku hallucinated source URLs at ~30% in early testing — unacceptable when tapping the source link is a core feature. Cost difference at household scale is ~$2/month.
 
-Rate limits: tier-1 Anthropic quota covers ~80 search calls/day. We're nowhere close to that with one household.
+Anthropic tier-1 quota covers ~80 search calls/day. Combined with the per-IP rate limit above and the 7-day Firestore cache, we're nowhere close to that with one household — most repeat queries hit cache in single-digit ms and never reach Anthropic at all.

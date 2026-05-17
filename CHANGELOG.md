@@ -2,6 +2,46 @@
 
 Ship log keyed by milestone. Commits referenced where useful. Most recent at the top.
 
+## M2.5 — Dark mode + security hardening (May 2026)
+
+[`ebbde95`](https://github.com/duckybaby/recipy/commit/ebbde95) — Two unrelated fronts in one push: dark mode rolled out across the whole UI, and Patch 3 (security/a11y/cost-ceiling) landed in the backend + workflow.
+
+### Dark mode — "Warm Charcoal" palette
+
+`@theme` tokens stay light; a `[data-theme="dark"]` override block flips ~25 vars (paper, ink, accent, shadows, toasts). Tailwind utilities re-resolve through CSS custom-property cascade, so no `dark:` prefix lives anywhere in components.
+
+The dark accent runs **15% darker** than the brand red (`#d63f2a → #b63624`). Lifting it (we tried `#ff5c44`) read as "neon Instagram button" against the dim page and broke white-text contrast. Darker actually improved CTA contrast (5.3:1 vs 4.6:1) while feeling grounded.
+
+New tokens introduced to handle the dark-mode shift cleanly:
+
+- `--color-on-accent` — warm off-white text on CTA fills (`#fbf5eb`, same in both modes — pure white reads "tech demo" against tomato).
+- `--color-accent-strong` — lifted red for text/border on `accent-soft` surfaces (chip-selected, pill-info). Same as accent in light, lifted in dark so the chip label stays legible against the subtle tomato wash.
+- `--color-accent-soft` (dark) — switched from a solid `#4f2218` to translucent `rgba(182, 54, 36, 0.10)` so the selected chip reads as a hint, not a block. Border + text carry the "selected" signal.
+- `--color-toast-success-bg/text` + `--color-toast-info-bg/text` — eliminates the hardcoded `rgba(45, 106, 79, 0.55)` and `rgba(28, 28, 28, 0.75)` that lived in Results and Recipe.
+- `--color-accent-flash`, `--shadow-fab-neutral` — for the timer pulse and the Instamart-mode FAB drop shadow.
+
+`ThemeToggle` component in the Form header. Tri-state cycle: **Light → Dark → Auto**. Auto follows `prefers-color-scheme` AND listens for OS-level changes mid-session via `matchMedia.change`. Persisted in the Zustand store, version bumped 1 → 2 with a migration that wipes only `theme` (keeps filters / lastSearch / activeRecipe) — so any explicit preference set during testing resets to Auto on next load.
+
+Inline `<script>` in `<head>` of `index.html` reads `localStorage.recipy-store` synchronously, resolves the theme, and sets `data-theme` on `<html>` before React mounts. No white flash on dark loads. Also updates the iOS Safari `theme-color` meta tag dynamically.
+
+### Patch 3 — Firestore rules + viewport zoom + rate limiting
+
+- **`firestore.rules`** added at repo root. Client-side access fully closed (`allow read, write: if false`). The Cloud Function uses firebase-admin which bypasses these rules. No browser code reads Firestore directly, so closed is correct. `firebase.json` gained a `firestore` block with `"database": "recipy-cache"` so deploys target the named DB. CI workflow `--only` extended to `hosting,functions,firestore`. Service account needs Cloud Datastore Owner + Firebase Rules Admin on the GCP project — both granted.
+- **Viewport meta** in `index.html` dropped `maximum-scale=1.0, user-scalable=no` (WCAG 2.1.4.4 — Resize text). The custom-chip input in `ChipGroup.tsx` bumped from `text-strong` (15px) to `text-body` (16px) so iOS Safari doesn't auto-zoom on focus.
+- **`express-rate-limit@^8.0.0`** added to `functions/`. `writeLimiter` (10/min) on all five POST routes, `readLimiter` (30/min) on `/api/health`. Per-route by design — a search shouldn't compete with a feedback submit. Required `app.set("trust proxy", 1)` so `req.ip` reflects the real client (Cloud Run sits behind Google's LB). Request logger now includes `ip=` so trust-proxy is verifiable from Cloud Run logs. In-memory store means the effective ceiling is N×limit across warm instances (N ≤ `maxInstances: 10`) — fine at household scale.
+
+### Dependency refresh
+
+| Package | Old | New |
+|---|---|---|
+| `firebase-functions` | ^6.0.0 | ^7.2.5 |
+| `@anthropic-ai/sdk` | ^0.40.0 | ^0.96.0 |
+| `express-rate-limit` | ^7.4.0 (just added) | ^8.5.2 |
+| `actions/checkout` (CI) | v4 | v5 |
+| `actions/setup-node` (CI) | v4 | v5 |
+
+The v4 actions deprecation warning from the last CI run is gone. TypeScript (5→6), zod (3→4), and express (4→5) intentionally deferred — they have wider semantic changes and need a considered separate update.
+
 ## M2.1 — State refactor (May 2026)
 
 [`f98ab00`](https://github.com/duckybaby/recipy/commit/f98ab00) — Filters moved off URL search params into a Zustand store. URL is back to three paths (`/`, `/results`, `/recipe/:id`) with no query strings. Loader policy now follows user intent (`location.state.intent`) rather than cache presence, which fixed two long-standing bugs:
