@@ -56,6 +56,16 @@
   --color-accent: #d63f2a;
   --color-accent-hover: #b8331f;
   --color-accent-soft: #fdeae5;
+  /* "Strong" variant — used where the accent appears as text or border
+     on accent-soft surfaces (chip-selected, pill-info). In light mode
+     this equals --color-accent; in dark mode it lifts so the red text
+     stays readable against the lifted accent-soft surface. */
+  --color-accent-strong: #d63f2a;
+  /* Text colour for things layered on top of the accent (CTA buttons,
+     FAB, ingredient ticks). Warm off-white — a touch softer than pure
+     #fff, which reads "tech demo" against tomato. Same value in both
+     modes — the accent surface itself does the dark-mode work. */
+  --color-on-accent: #fbf5eb;
 
   /* ---- Semantic — Success (cookbook-green, less saturated) ---- */
   --color-success-50: #ecf3ee;
@@ -78,6 +88,18 @@
   --color-info-300: #d63f2a;
   --color-info-700: #1a1a1a;
 
+  /* ---- Toast surfaces — tokenized so dark mode can swap cleanly.
+     Both variants are translucent so backdrop-blur reveals what's below. */
+  --color-toast-success-bg: rgba(45, 106, 79, 0.55);
+  --color-toast-success-text: #ffffff;
+  --color-toast-info-bg: rgba(28, 28, 28, 0.75);
+  --color-toast-info-text: #ffffff;
+
+  /* ---- Accent flash — used by the timer-flash keyframe and any other
+     "pulse the accent at low alpha" moment. Tokenized so dark mode can
+     bump the alpha to compensate for the lifted accent. */
+  --color-accent-flash: rgba(214, 63, 42, 0.18);
+
   /* ---- Radii — editorial. Soft on cards, sharp-ish on chips. ---- */
   --radius-button: 10px;
   --radius-card: 14px;
@@ -88,6 +110,93 @@
   --shadow-soft: 0 1px 2px rgba(26, 26, 26, 0.04), 0 4px 12px rgba(26, 26, 26, 0.05);
   --shadow-soft-lg: 0 2px 4px rgba(26, 26, 26, 0.05), 0 12px 28px rgba(26, 26, 26, 0.08);
   --shadow-cta: 0 1px 2px rgba(214, 63, 42, 0.18), 0 6px 18px rgba(214, 63, 42, 0.22);
+  /* Neutral FAB shadow — used on the Instamart mode of the Recipe page
+     sticky CTA. Slightly heavier than --shadow-soft-lg so the floating
+     button sits clearly above the page. */
+  --shadow-fab-neutral: 0 1px 2px rgba(26, 26, 26, 0.06), 0 6px 18px rgba(26, 26, 26, 0.10);
+}
+
+/* ============================================================
+   Dark theme — "Warm Charcoal"
+   ============================================================
+   Activated by setting `data-theme="dark"` on <html>. The early init
+   script in index.html reads localStorage (or prefers-color-scheme)
+   and sets this attribute before paint, so there's no flash.
+
+   All values override @theme tokens via CSS custom property cascade.
+   Every Tailwind utility built from these tokens (bg-paper, text-ink,
+   etc.) re-resolves automatically — no `dark:` prefix needed anywhere.
+   ============================================================ */
+[data-theme="dark"] {
+  /* ---- Ink — warm off-white, descending into muted creams ---- */
+  --color-ink:          #f4ede0;
+  --color-ink-muted:    #b8aa92;
+  --color-ink-faint:    #8b7e69;
+  --color-ink-disabled: #5e5447;
+
+  /* ---- Paper — deep warm charcoal, one notch up for skeletons ---- */
+  --color-paper:        #1a1612;
+  --color-paper-soft:   #221d18;
+
+  /* ---- Lines — warm hairlines, just visible on the dark surface ---- */
+  --color-line:         #2e2820;
+  --color-line-soft:    #25201a;
+
+  --color-overlay:      rgba(0, 0, 0, 0.65);
+
+  /* ---- Accent — ~15% darker than the brand red (#d63f2a → #b63624).
+     Dark mode wants its loud colours toned down so the saturated red
+     doesn't dominate the dim page. White-on-accent contrast actually
+     improves (5.3:1 vs 4.6:1) — the trade-off is a calmer button. */
+  --color-accent:       #b63624;
+  --color-accent-hover: #c54636; /* same 15% dim applied to the prior
+                                    hover so the relative lift stays. */
+  /* Translucent accent over paper so the selected chip reads as a
+     subtle tomato wash, not a solid block. Tracks the darkened accent
+     so the wash stays the same hue family as the new CTAs. */
+  --color-accent-soft:  rgba(182, 54, 36, 0.10);
+  /* Lifted variant for text on accent-soft. Also dialed 15% darker so
+     the chip-selected label doesn't shout next to the calmer CTA. */
+  --color-accent-strong: #c03e31;
+
+  /* ---- Semantic — Success (lifted forest, readable on dark) ---- */
+  --color-success-50:   #1a2b22;
+  --color-success-300:  #6b9d83;
+  --color-success-500:  #88c2a4;
+  --color-success-700:  #c5e3d2;
+
+  /* ---- Semantic — Warning (lifted saffron) ---- */
+  --color-warning-50:   #2a1d10;
+  --color-warning-300:  #c98850;
+  --color-warning-500:  #e8b070;
+  --color-warning-700:  #f8d9b0;
+  --color-warning-800:  #fbe7c8;
+
+  --color-missing:      #e8b070;
+
+  /* ---- Info — selected-chip palette, tracks the darkened accent ---- */
+  --color-info-50:      #3a1a13;
+  --color-info-300:     #b63624;
+  --color-info-700:     #f4ede0;
+
+  /* ---- Toast surfaces — info flips to a lifted dark so the bubble
+     sits above the paper without inverting the whole semantic. ---- */
+  --color-toast-success-bg: rgba(86, 156, 122, 0.55);
+  --color-toast-success-text: #ffffff;
+  --color-toast-info-bg: rgba(60, 50, 40, 0.92);
+  --color-toast-info-text: #f4ede0;
+
+  /* ---- Accent flash — tracks the darkened accent. ---- */
+  --color-accent-flash: rgba(182, 54, 36, 0.30);
+
+  /* ---- Shadows — pure-black + higher alpha for the neutral pair so
+     they actually cast against dark paper. The CTA glow uses the
+     darkened accent at low alpha — same hue as the button fill, no
+     halation. Reads as a faint drop, not a bloom. ---- */
+  --shadow-soft:    0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-soft-lg: 0 2px 4px rgba(0, 0, 0, 0.40), 0 12px 28px rgba(0, 0, 0, 0.55);
+  --shadow-cta:     0 1px 2px rgba(182, 54, 36, 0.18), 0 6px 18px rgba(182, 54, 36, 0.22);
+  --shadow-fab-neutral: 0 1px 2px rgba(0, 0, 0, 0.40), 0 6px 18px rgba(0, 0, 0, 0.55);
 }
 
 /* ============================================================
@@ -158,9 +267,12 @@
     border-color: var(--color-ink-faint);
   }
   .chip-selected {
+    /* `accent-strong` reads as the brand red in light mode and a lifted
+       red in dark mode — keeps the text/border legible on accent-soft
+       without dragging the CTA fills along. */
     background-color: var(--color-accent-soft);
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    border-color: var(--color-accent-strong);
+    color: var(--color-accent-strong);
     font-weight: 600;
   }
 
@@ -185,14 +297,14 @@
   }
   .pill-info {
     background-color: var(--color-accent-soft);
-    color: var(--color-accent);
+    color: var(--color-accent-strong);
   }
 
   /* -------- Primary CTA — tomato fill, white text, generous height ---- */
   .btn-primary {
     @apply inline-flex w-full items-center justify-center rounded-button;
     background-color: var(--color-accent);
-    color: #ffffff;
+    color: var(--color-on-accent);
     font-size: 17px;
     font-weight: 600;
     letter-spacing: -0.005em;
@@ -268,7 +380,7 @@
     background-color: transparent;
   }
   50% {
-    background-color: rgba(214, 63, 42, 0.18);
+    background-color: var(--color-accent-flash);
   }
 }
 .timer-flash {

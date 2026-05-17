@@ -432,10 +432,17 @@ function Toast({
 
   // Green frosted for success, dark ink for "tried and didn't find anything".
   // Same shape; the colour swap is the only signal we use to differentiate.
+  // Both surfaces + their text colour come from theme tokens so dark mode
+  // can lift the green / flip the dark to a lifted dark without forking
+  // this component.
   const background =
     variant === "success"
-      ? "rgba(45, 106, 79, 0.55)"
-      : "rgba(28, 28, 28, 0.75)";
+      ? "var(--color-toast-success-bg)"
+      : "var(--color-toast-info-bg)";
+  const textColor =
+    variant === "success"
+      ? "var(--color-toast-success-text)"
+      : "var(--color-toast-info-text)";
 
   return (
     <div
@@ -449,8 +456,8 @@ function Toast({
       style={{ top: "calc(max(env(safe-area-inset-top), 8px) + 88px)" }}
     >
       <div
-        className="rounded-button px-4 py-3 text-center text-strong font-medium text-paper shadow-soft backdrop-blur-lg"
-        style={{ background }}
+        className="rounded-button px-4 py-3 text-center text-strong font-medium shadow-soft backdrop-blur-lg"
+        style={{ background, color: textColor }}
       >
         {message}
       </div>

@@ -798,7 +798,13 @@ export default function Recipe() {
           className="fixed inset-x-0 z-50 mx-auto max-w-md px-5"
           style={{ bottom: "calc(max(env(safe-area-inset-bottom), 16px) + 88px)" }}
         >
-          <div className="mx-auto inline-block rounded-button bg-ink px-4 py-2.5 text-center text-caption font-medium text-paper shadow-soft-lg">
+          <div
+            className="mx-auto inline-block rounded-button px-4 py-2.5 text-center text-caption font-medium shadow-soft-lg"
+            style={{
+              background: "var(--color-toast-info-bg)",
+              color: "var(--color-toast-info-text)",
+            }}
+          >
             {toast.msg}
           </div>
         </div>
@@ -814,8 +820,11 @@ export default function Recipe() {
           style={{ top: `calc(${topBarH}px + 8px)` }}
         >
           <div
-            className="rounded-button px-4 py-3 text-center text-strong font-medium text-paper shadow-soft backdrop-blur-lg"
-            style={{ background: "rgba(45, 106, 79, 0.55)" }}
+            className="rounded-button px-4 py-3 text-center text-strong font-medium shadow-soft backdrop-blur-lg"
+            style={{
+              background: "var(--color-toast-success-bg)",
+              color: "var(--color-toast-success-text)",
+            }}
           >
             {toast.msg}
           </div>
@@ -987,7 +996,7 @@ function CookingCTA({
               aria-label={aria}
               className={`focus-ring inline-flex w-full items-center justify-center gap-2 rounded-button font-semibold transition-colors ${
                 isInstamart
-                  ? "border border-line bg-paper text-accent shadow-soft hover:bg-accent-soft"
+                  ? "border border-line bg-paper text-accent shadow-soft hover:bg-accent-soft hover:text-accent-strong"
                   : "btn-primary"
               } ${mode === "full" ? "pointer-events-auto" : ""}`}
               style={
@@ -1017,16 +1026,19 @@ function CookingCTA({
           className={`focus-ring inline-flex h-14 w-14 items-center justify-center rounded-full transition-all duration-200 ease-out active:scale-95 ${
             isInstamart
               ? "border border-line bg-paper text-accent"
-              : "bg-accent text-paper"
+              : "bg-accent text-on-accent"
           } ${
             mode === "fab"
               ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
               : "pointer-events-none translate-y-4 scale-90 opacity-0"
           }`}
           style={{
+            // Both shadows come from theme tokens so dark mode picks up
+            // pure-black + higher-alpha values (ink-tinted shadows go
+            // invisible on a dark surface).
             boxShadow: isInstamart
-              ? "0 1px 2px rgba(26,26,26,0.06), 0 6px 18px rgba(26,26,26,0.10)"
-              : "0 1px 2px rgba(214,63,42,0.18), 0 6px 18px rgba(214,63,42,0.22)",
+              ? "var(--shadow-fab-neutral)"
+              : "var(--shadow-cta)",
           }}
         >
           {isInstamart ? <ShoppingCart size={22} /> : <ChefHat size={24} />}

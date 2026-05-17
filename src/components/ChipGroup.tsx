@@ -187,7 +187,11 @@ export function ChipGroup({
               }}
               maxLength={28}
               placeholder="Type and hit enter"
-              className="h-12 w-40 bg-transparent text-strong text-ink placeholder:text-ink-disabled focus:outline-none"
+              // text-body (16px), NOT text-strong (15px). 16px is the iOS
+              // auto-zoom threshold — anything smaller triggers Safari to
+              // zoom in on focus, which is jarring now that pinch-zoom is
+              // re-enabled at the viewport level (Patch 3).
+              className="h-12 w-40 bg-transparent text-body text-ink placeholder:text-ink-disabled focus:outline-none"
             />
           </div>
         )}

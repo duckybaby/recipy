@@ -19,6 +19,7 @@ import { defineSecret } from "firebase-functions/params";
 import { initializeApp, getApps } from "firebase-admin/app";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -76,12 +77,24 @@ const corsMiddleware = cors({
 
 // ----- App -----
 const app = express();
+
+// Cloud Run sits behind Google's load balancer. Without trusting one
+// proxy hop, Express's `req.ip` reflects the LB's address — every
+// request looks like the same client and the rate limiter would block
+// everyone after the first N hits. The "1" means "trust exactly one
+// proxy in front." If after deploy the limiter blocks after 1–2 hits
+// instead of the configured N, bump this to `true`.
+app.set("trust proxy", 1);
+
 app.use(corsMiddleware);
 app.use(express.json({ limit: "1mb" }));
 
-// Tiny request logger — helps debug from the Cloud Run logs.
+// Tiny request logger — helps debug from the Cloud Run logs. Also logs
+// req.ip so we can verify trust-proxy is reading the real client IP
+// (not the LB's) for rate limiting. If every request shows the same
+// IP, trust-proxy isn't taking effect.
 app.use((req, _res, next) => {
-  console.log(`${req.method} ${req.path}`);
+  console.log(`${req.method} ${req.path} ip=${req.ip}`);
   next();
 });
 
@@ -89,6 +102,44 @@ app.use((req, _res, next) => {
 // real web app. Must run after CORS (so preflight succeeds) and before any
 // route handler. The middleware self-skips OPTIONS and /api/health.
 app.use(verifyAppCheck);
+
+// ----- Rate limiting (spec §7.2) -----
+//
+// Per-IP, per-route: a single IP can hit each POST endpoint up to 10
+// times per minute, and /api/health up to 30 times per minute. The
+// limiter is per-route (not shared across endpoints) so a search
+// doesn't compete with a feedback submit. Effective total cap for one
+// IP is 10×5 + 30 = 80 requests/minute, well below anything a real
+// user would do but tight enough to cap cost if anything goes wrong.
+//
+// Important: express-rate-limit uses an in-memory store. Cloud
+// Functions can scale to maxInstances containers (10 in our config),
+// so the EFFECTIVE limit is up to N×limit when traffic spreads across
+// warm instances. For a one-user app this is fine — even 10× the
+// configured budget is way under what would hurt. If we ever care
+// about strict ceilings, swap in a Firestore-backed store.
+const RATE_LIMIT_ERROR = {
+  error: {
+    code: "rate_limited",
+    message: "Too many requests. Try again in a minute.",
+  },
+};
+
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: RATE_LIMIT_ERROR,
+});
+
+const readLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: RATE_LIMIT_ERROR,
+});
 
 // Async handler wrapper so thrown errors land in our error middleware.
 function asyncHandler(
@@ -130,6 +181,7 @@ function normaliseUrlKey(input: string): string | null {
 // loading copy when content was instant.
 app.post(
   "/api/search-recipes",
+  writeLimiter,
   asyncHandler(async (req, res) => {
     // `skipCache: true` tells us to bypass the read path entirely —
     // regenerate uses this so "give me other recipes" actually fetches
@@ -238,6 +290,7 @@ app.post(
 
 app.post(
   "/api/find-alternate-source",
+  writeLimiter,
   asyncHandler(async (req, res) => {
     const parsed = AlternateSourceBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -283,6 +336,7 @@ app.post(
 
 app.post(
   "/api/recompute-field",
+  writeLimiter,
   asyncHandler(async (req, res) => {
     const parsed = RecomputeFieldBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -323,6 +377,7 @@ app.post(
 
 app.post(
   "/api/get-substitutions",
+  writeLimiter,
   asyncHandler(async (req, res) => {
     const parsed = SubstitutionsBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -355,6 +410,7 @@ app.post(
 
 app.post(
   "/api/feedback",
+  writeLimiter,
   asyncHandler(async (req, res) => {
     const parsed = FeedbackBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -368,7 +424,7 @@ app.post(
 );
 
 // ----- Health check -----
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", readLimiter, (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 

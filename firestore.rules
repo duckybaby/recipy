@@ -1,0 +1,19 @@
+// Firestore Security Rules for the `recipy-cache` named database.
+//
+// The Cloud Functions API uses the firebase-admin SDK which bypasses
+// these rules entirely. No client code in this repo opens a direct
+// Firestore connection from the browser — every read/write goes through
+// the API. So the client-side rules are fully closed.
+//
+// If you ever add direct browser-to-Firestore access (e.g. realtime
+// listeners for a multi-user feature), this file is where the gates
+// open. Until then, principle of least privilege applies.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

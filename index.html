@@ -2,11 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Pinch-zoom must remain enabled (WCAG 2.1.4.4 — Resize text). The
+      previous viewport had `maximum-scale=1.0, user-scalable=no` to
+      stop iOS Safari's auto-zoom on input focus. We solve that for the
+      one user-facing input (the custom-chip "type to add" field in
+      ChipGroup.tsx) by giving it a 16px+ font-size, which is below
+      iOS's auto-zoom threshold.
+    -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#1a1a1a" />
+    <!-- Default light value. The inline init script below overwrites this
+         to match the active theme on every load. -->
+    <meta name="theme-color" content="#ffffff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="recipy" />
@@ -27,6 +37,40 @@
     />
 
     <title>recipy — what are we cooking?</title>
+
+    <!--
+      Early theme init. Runs synchronously before any paint so the first
+      frame draws on the right surface (no white-to-dark flash on dark
+      mode loads). Reads from the same `recipy-store` localStorage key
+      the Zustand store writes to. If `state.theme` is "light" or "dark"
+      the user has an explicit preference; otherwise we honour
+      prefers-color-scheme. Mirrors src/lib/store.ts → resolveTheme().
+    -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem("recipy-store");
+          var pref = null;
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            var t = parsed && parsed.state && parsed.state.theme;
+            if (t === "light" || t === "dark") pref = t;
+          }
+          var mode =
+            pref ||
+            (window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light");
+          document.documentElement.dataset.theme = mode;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta)
+            meta.setAttribute("content", mode === "dark" ? "#1a1612" : "#ffffff");
+        } catch (e) {
+          // localStorage blocked (private mode), JSON malformed, etc. Fall
+          // through to default light. Any path here is a safe degradation.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

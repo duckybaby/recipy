@@ -8,6 +8,10 @@
 //                     the cache fast-path when filters haven't changed.
 //   • activeRecipe  — the recipe being viewed on /recipe/:id. Replaces the
 //                     old localStorage key of the same name.
+//   • theme         — user's explicit light/dark choice. `null` means
+//                     "follow the system" (prefers-color-scheme). Read by
+//                     the early init script in index.html so the right
+//                     surface paints on first frame.
 //
 // What does NOT live here:
 //   • cookingState, recentRecipes, dismissedMakeahead, notificationsPrompt,
@@ -49,10 +53,15 @@ export type ActiveRecipeState = {
   openedAt: string; // ISO
 };
 
+// Theme preference. `null` means the user hasn't picked — fall back to
+// `prefers-color-scheme`. "light" / "dark" are explicit overrides.
+export type ThemePreference = "light" | "dark" | null;
+
 interface AppState {
   filters: SearchFilters;
   lastSearch: LastSearchState | null;
   activeRecipe: ActiveRecipeState | null;
+  theme: ThemePreference;
 
   setFilters: (next: SearchFilters) => void;
   patchFilters: (patch: Partial<SearchFilters>) => void;
@@ -63,6 +72,8 @@ interface AppState {
 
   setActiveRecipe: (recipe: Recipe, source?: ActiveRecipeState["source"]) => void;
   clearActiveRecipe: () => void;
+
+  setTheme: (next: ThemePreference) => void;
 }
 
 const LAST_SEARCH_TTL_MS = 24 * 60 * 60 * 1000;
@@ -73,6 +84,7 @@ export const useStore = create<AppState>()(
       filters: EMPTY_FILTERS,
       lastSearch: null,
       activeRecipe: null,
+      theme: null,
 
       setFilters: (next) => set({ filters: next }),
       patchFilters: (patch) =>
@@ -91,19 +103,35 @@ export const useStore = create<AppState>()(
           },
         }),
       clearActiveRecipe: () => set({ activeRecipe: null }),
+
+      setTheme: (next) => set({ theme: next }),
     }),
     {
       name: "recipy-store",
       storage: createJSONStorage(() => localStorage),
-      version: 1,
-      // Drop any persisted state from earlier versions — none exist today
-      // but this keeps future migrations honest.
-      migrate: (_persistedState, _fromVersion) => undefined,
-      // Don't persist nothing — keep all three slices durable.
+      // v2: reset every persisted `theme` back to null (Auto). The
+      // toggle had two manual states before — once users committed,
+      // they were locked out of Auto. The cycle now passes through it,
+      // but anyone whose store predates this bump still carries their
+      // old explicit preference. Wiping just `theme` (not filters /
+      // lastSearch / activeRecipe) is the gentlest fix.
+      version: 2,
+      migrate: (persistedState, fromVersion) => {
+        if (fromVersion < 2 && persistedState && typeof persistedState === "object") {
+          const rest = { ...(persistedState as Record<string, unknown>) };
+          rest.theme = null;
+          return rest as Partial<AppState>;
+        }
+        return persistedState as Partial<AppState>;
+      },
+      // Persist every slice the early init script + back-nav restore care
+      // about. `theme` matters here because the inline script in index.html
+      // reads it before React mounts.
       partialize: (s) => ({
         filters: s.filters,
         lastSearch: s.lastSearch,
         activeRecipe: s.activeRecipe,
+        theme: s.theme,
       }),
     },
   ),
@@ -178,4 +206,37 @@ function arrayEqual<T>(a: readonly T[], b: readonly T[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+// ============================================================== theme ===
+
+// iOS Safari status-bar tint. Keep in sync with --color-paper for each mode
+// so the chrome doesn't clash with the page surface.
+const THEME_COLOR_LIGHT = "#ffffff";
+const THEME_COLOR_DARK = "#1a1612";
+
+/**
+ * Resolve a preference to a concrete mode. `null` → consult the OS via
+ * `prefers-color-scheme`. Safe to call before React mounts.
+ */
+export function resolveTheme(pref: ThemePreference): "light" | "dark" {
+  if (pref === "dark" || pref === "light") return pref;
+  if (typeof window === "undefined") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+/**
+ * Apply a resolved theme to the document: sets `data-theme` on <html>
+ * (which triggers the CSS token cascade) and updates the iOS Safari
+ * chrome-tint meta tag. Idempotent.
+ */
+export function applyTheme(mode: "light" | "dark"): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.theme = mode;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute("content", mode === "dark" ? THEME_COLOR_DARK : THEME_COLOR_LIGHT);
+  }
 }

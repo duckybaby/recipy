@@ -13,6 +13,7 @@
 
 import { useNavigate } from "react-router-dom";
 import { ChipGroup } from "../components/ChipGroup";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { EMPTY_FILTERS, useStore } from "../lib/store";
 import type {
   SearchFilters,
@@ -134,7 +135,14 @@ export default function Form() {
         style={{ paddingTop: "max(env(safe-area-inset-top), 20px)" }}
       >
         <header className="mx-auto max-w-md px-5 pb-2">
-          <h1 className="text-title">What are we cooking?</h1>
+          {/* Title + theme toggle on the same row. Toggle is small and lives
+              right-aligned so the title still reads as the dominant element. */}
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-title">What are we cooking?</h1>
+            <div className="-mr-2 mt-1 shrink-0">
+              <ThemeToggle />
+            </div>
+          </div>
           <p className="mt-2 text-body text-ink-muted">
             Tap a few things to find recipes, or{" "}
             <button

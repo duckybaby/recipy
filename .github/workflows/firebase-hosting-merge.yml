@@ -43,4 +43,9 @@ jobs:
         # retention of old container images) so the deploy doesn't exit 1
         # on that non-fatal warning, which otherwise aborts the Hosting
         # release before it finalizes.
-        run: npx firebase-tools deploy --only hosting,functions --project recipy-63422 --non-interactive --force
+        # `firestore` deploys the rules in firestore.rules to the
+        # `recipy-cache` named database (configured via firebase.json).
+        # The service account needs Cloud Datastore Owner (or Firebase
+        # Rules Admin) in addition to the existing hosting/functions
+        # roles — without that the deploy 403s on the firestore step.
+        run: npx firebase-tools deploy --only hosting,functions,firestore --project recipy-63422 --non-interactive --force
