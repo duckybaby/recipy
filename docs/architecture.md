@@ -221,12 +221,12 @@ The CSP:
 
 ```
 default-src 'self';
-script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com;
+script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://apis.google.com;
 style-src  'self' 'unsafe-inline' https://fonts.googleapis.com;
 font-src   'self' https://fonts.gstatic.com;
-img-src    'self' data: https://www.gstatic.com;
+img-src    'self' data: https://www.gstatic.com https://*.googleusercontent.com;
 connect-src 'self' https://*.googleapis.com https://www.google.com;
-frame-src  https://www.google.com;
+frame-src  'self' https://www.google.com https://accounts.google.com https://recipy-63422.firebaseapp.com;
 object-src 'none';
 base-uri   'self';
 form-action 'self';
@@ -234,6 +234,13 @@ frame-ancestors 'none';
 ```
 
 `'unsafe-inline'` is on `script-src` because of the inline theme-init script in `<head>` of `index.html` (synchronous read of `localStorage` before React mounts, to avoid a white-flash on dark loads). Migrating to a script-hash would mean recomputing the hash on every edit; not worth the maintenance overhead for an app with no `dangerouslySetInnerHTML` and no third-party HTML rendering. `'unsafe-inline'` on `style-src` covers React's inline `style="..."` attrs and Framer Motion's transform writes.
+
+**Firebase Auth (M3)** requires four additions to the baseline CSP:
+
+- `apis.google.com` on `script-src` — the Auth SDK loads `apis.google.com/js/api.js` for OAuth handshake. Without it, `signInWithGoogle` fails with `auth/internal-error`.
+- `*.googleusercontent.com` on `img-src` — user profile photos come from `lh3.googleusercontent.com`. Without it, the avatar in the drawer / profile renders as a broken-image icon.
+- `'self'` on `frame-src` — Firebase Auth loads `/__/auth/iframe` from our own origin to maintain auth state.
+- `accounts.google.com` + `recipy-63422.firebaseapp.com` on `frame-src` — Auth occasionally bridges through the default firebaseapp.com domain even when a custom `authDomain` is configured.
 
 `connect-src` is wildcarded to `https://*.googleapis.com` because the Firebase Web SDK calls *several* `*.googleapis.com` endpoints on init — Installations (`firebaseinstallations.googleapis.com`) is required before App Check (`firebaseappcheck.googleapis.com`) can mint a token, and Remote Config / Firestore would add more. Listing each one explicitly is brittle (each Firebase SDK addition risks a fresh prod break); the wildcard still blocks non-Google origins.
 
