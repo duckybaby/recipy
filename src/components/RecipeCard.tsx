@@ -39,7 +39,12 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
     >
       <motion.h3
         layoutId={enableMorph ? `recipe-title-${recipe.id}` : undefined}
-        className="line-clamp-2 text-title leading-tight text-ink md:line-clamp-3 md:text-card-title"
+        // md:min-h-[2lh] floors the title at 2 line-heights so a 1-line title
+        // ("Pho") reserves the same vertical space as a 2-line title. Without
+        // it, the md 2-col layout (3 recipes → 2+1) leaves the lone row-2 card
+        // visibly shorter than the two row-1 cards. Using `lh` (line-height
+        // unit) so it tracks the type scale — no px to drift.
+        className="line-clamp-2 text-title leading-tight text-ink md:line-clamp-3 md:min-h-[2lh] md:text-card-title"
       >
         {recipe.title}
       </motion.h3>
