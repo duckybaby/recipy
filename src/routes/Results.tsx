@@ -252,7 +252,7 @@ export default function Results() {
           filtersSummary={summarizeFilters(filters)}
         />
         <main
-          className="mx-auto max-w-md px-5 pt-2"
+          className="mx-auto max-w-md px-5 pt-2 md:max-w-[1100px] md:px-8 lg:px-10"
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
         >
           <ErrorState message={phase.message} onRetry={retry} onBack={back} />
@@ -299,7 +299,7 @@ export default function Results() {
       />
 
       <main
-        className="mx-auto max-w-md px-5 pt-2"
+        className="mx-auto max-w-md px-5 pt-2 md:max-w-[1100px] md:px-8 md:pt-6 lg:px-10"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
       >
         {recipes.length === 0 && phase.kind === "ready" ? (
@@ -344,35 +344,39 @@ function TopBar({
       className="sticky top-0 z-20 bg-paper/60 backdrop-blur-lg"
       style={{ paddingTop: "max(env(safe-area-inset-top), 8px)" }}
     >
-      <div className="mx-auto flex max-w-md items-center gap-1 px-3">
+      {/* Shared max-width wrapper so the action row and the filter-summary
+          click area both align with the cards below at every breakpoint. */}
+      <div className="mx-auto max-w-md md:max-w-[1100px]">
+        <div className="flex items-center gap-1 px-3 md:px-8 lg:px-10">
+          <button
+            type="button"
+            aria-label="Back to filters"
+            onClick={onBack}
+            className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="text-strong font-semibold text-ink">Recipes</h1>
+          <button
+            type="button"
+            aria-label="Regenerate results"
+            onClick={onRetry}
+            disabled={loading}
+            className="focus-ring ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink disabled:opacity-40"
+          >
+            <RotateCw size={18} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
         <button
           type="button"
-          aria-label="Back to filters"
           onClick={onBack}
-          className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
+          className="focus-ring block w-full px-5 pt-1 pb-2 text-left md:px-8 lg:px-10"
         >
-          <ArrowLeft size={20} />
-        </button>
-        <h1 className="text-strong font-semibold text-ink">Recipes</h1>
-        <button
-          type="button"
-          aria-label="Regenerate results"
-          onClick={onRetry}
-          disabled={loading}
-          className="focus-ring ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink disabled:opacity-40"
-        >
-          <RotateCw size={18} className={loading ? "animate-spin" : ""} />
+          <span className="block truncate text-caption text-ink-muted">
+            {filtersSummary}
+          </span>
         </button>
       </div>
-      <button
-        type="button"
-        onClick={onBack}
-        className="focus-ring block w-full px-5 pt-1 pb-2 text-left"
-      >
-        <span className="block truncate text-caption text-ink-muted">
-          {filtersSummary}
-        </span>
-      </button>
     </div>
   );
 }
@@ -384,8 +388,15 @@ function CardList({
   recipes: Recipe[];
   batchKey: number;
 }) {
+  // Phone stacks; md goes 2-up with the 3rd card alone on the second row;
+  // lg+ puts all three in a single row. card-rise stagger continues to play
+  // left-to-right on desktop — same animation delay, just a different
+  // visual sweep direction.
   return (
-    <div key={batchKey} className="mt-4 flex flex-col gap-4">
+    <div
+      key={batchKey}
+      className="mt-4 flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-3"
+    >
       {recipes.map((r, i) => (
         <div
           key={r.id}

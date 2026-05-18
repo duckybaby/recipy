@@ -49,7 +49,7 @@ function StirringPot() {
     <svg
       viewBox="0 0 96 96"
       xmlns="http://www.w3.org/2000/svg"
-      className="h-20 w-20"
+      className="h-20 w-20 md:h-28 md:w-28"
       aria-hidden
     >
       {/* Steam wisps */}
@@ -80,7 +80,7 @@ function KnifeChopping() {
     <svg
       viewBox="0 0 96 96"
       xmlns="http://www.w3.org/2000/svg"
-      className="h-20 w-20"
+      className="h-20 w-20 md:h-28 md:w-28"
       aria-hidden
     >
       {/* Board */}
@@ -112,7 +112,7 @@ function WhiskBowl() {
     <svg
       viewBox="0 0 96 96"
       xmlns="http://www.w3.org/2000/svg"
-      className="h-20 w-20"
+      className="h-20 w-20 md:h-28 md:w-28"
       aria-hidden
     >
       {/* Bowl */}
@@ -204,7 +204,7 @@ export function Loader({ streamed, target }: Props) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
-        className="loader-bar mt-8 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-paper-soft"
+        className="loader-bar mt-8 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-paper-soft md:max-w-sm"
       >
         <div
           className="loader-bar-fill h-full rounded-full bg-accent transition-[width] duration-500 ease-out"

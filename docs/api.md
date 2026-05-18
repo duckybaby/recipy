@@ -18,6 +18,8 @@ All error responses share one envelope:
 { "error": { "code": "snake_case_code", "message": "human-readable explanation" } }
 ```
 
+Validation errors (Zod) surface their actual message so the client can show useful debug info. Unhandled 500s return a generic `{ "code": "internal", "message": "Internal error" }` envelope — real failure context lands in Cloud Logging via `console.error`, not in the client response. CORS rejections still echo the rejected origin (`cors_blocked`) so DevTools debugging stays sane.
+
 ## Rate limits
 
 Per-IP, per-route, in-memory store on the Cloud Function. Headers follow the IETF [draft-7 rate-limit spec](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/) — clients can read `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset`.
@@ -48,7 +50,7 @@ In-memory store + `maxInstances: 10` on the function means the effective ceiling
 ```ts
 {
   meal: Meal[],                         // 0..5 values
-  cuisines: Cuisine[],                  // 0..N values, supports custom: prefix
+  cuisines: Cuisine[],                  // 0..N values, supports custom: prefix (≤60 chars, no control chars)
   diet: Diet[],                         // 0..5 values
   prepMax: 5 | 15 | 30 | null,          // "any" coerced to null client-side
   cookMax: 15 | 30 | 60 | null,
@@ -56,10 +58,14 @@ In-memory store + `maxInstances: 10` on the function means the effective ceiling
   mainIngredients: MainIngredient[],
   surprise?: boolean,                   // when true, ignores the chip filters and asks for a spread across cuisines
   similarTo?: string                    // dish title; biases the search but doesn't return the same dish
+                                        // sanitized: control chars/newlines stripped, trimmed, capped 80 chars
+                                        //            (500-char hard reject pre-clean)
 }
 ```
 
 See `src/lib/types.ts` for the enum values.
+
+Both `similarTo` and any `custom:<value>` chip ultimately get interpolated into the LLM user prompt, so the backend sanitizes them in zod at the entry boundary — stripping control chars and capping length so a user can't break out of the surrounding quotes to inject instruction-like text. `similarTo` is also lowercased before the cache hash so `"Tomato soup"` and `"tomato soup"` share a cache slot.
 
 ### Response stream
 

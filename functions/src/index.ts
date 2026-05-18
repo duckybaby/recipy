@@ -435,13 +435,22 @@ app.use((req, res) => {
   });
 });
 
+// CORS rejections are surfaced as 403 with the original message — the
+// caller knows their own origin and the explicit error helps debugging
+// from the browser DevTools. All other errors get a generic message so
+// internal details (stack traces, SDK errors, file paths) never leak to
+// the client. Real failure context still lands in Cloud Logging via the
+// console.error above.
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error:", err);
-  const message = err.message || "Internal error";
-  // CORS rejection → 403 to make the cause obvious in DevTools.
-  const status = message.startsWith("Origin not allowed") ? 403 : 500;
-  res.status(status).json({
-    error: { code: status === 403 ? "cors_blocked" : "internal", message },
+  if (err.message?.startsWith("Origin not allowed")) {
+    res.status(403).json({
+      error: { code: "cors_blocked", message: err.message },
+    });
+    return;
+  }
+  res.status(500).json({
+    error: { code: "internal", message: "Internal error" },
   });
 });
 

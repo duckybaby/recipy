@@ -7,8 +7,13 @@
 // "+ Add" button. Custom chips persist in localStorage (see storage.ts)
 // and render alongside the built-in options. Long-press / hover-to-show
 // a small "×" to remove a custom chip.
+//
+// `maxRows` caps the visible wrap-rows when collapsed. Anything beyond
+// is hidden under a max-height clamp and revealed by a "Show all" toggle
+// rendered below the chip wrap. Cap value is height-in-pixels derived
+// from the chip min-height + gap so it's invariant across viewport sizes.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import {
   addCustomChip,
@@ -26,10 +31,20 @@ interface ChipGroupProps {
   multi: boolean;
   onChange: (next: string[]) => void;
   allowAdd?: boolean; // show "+ Add" UI for user-added options
+  /** Visible-row cap when collapsed. Overflow is hidden behind a
+      "Show all" toggle. Defaults to 4. */
+  maxRows?: number;
   /** Notified whenever the rendered chip set changes so the form can
       keep a stable count for the splat CTA. */
   onOptionsChange?: (options: ChipOption[]) => void;
 }
+
+// Matches `.chip { min-height: 48px }` + Tailwind `gap-2` (8px) used on
+// the wrap container. If either changes, update this so the visual cap
+// still matches "N visual rows."
+const CHIP_ROW_PX = 48;
+const CHIP_GAP_PX = 8;
+const rowsToPx = (rows: number) => rows * CHIP_ROW_PX + (rows - 1) * CHIP_GAP_PX;
 
 export function ChipGroup({
   id,
@@ -39,6 +54,7 @@ export function ChipGroup({
   multi,
   onChange,
   allowAdd = false,
+  maxRows = 4,
   onOptionsChange,
 }: ChipGroupProps) {
   // Custom chips load from storage on mount; updates push back synchronously.
@@ -120,13 +136,43 @@ export function ChipGroup({
     setAdding(false);
   };
 
+  // -------- Row cap (collapse / expand) --------
+  // Cap kicks in only when the natural height of the wrap exceeds the
+  // `maxRows` threshold. Measured with a ResizeObserver so the toggle
+  // appears/disappears as chips are added or removed and as the
+  // container reflows across breakpoints.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const capPx = rowsToPx(maxRows);
+
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const check = () => {
+      // scrollHeight is the natural height regardless of the current
+      // max-height clamp, so this works whether expanded or not.
+      setOverflowing(el.scrollHeight > capPx + 1);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [capPx, allOptions.length, adding]);
+
+  const showToggle = overflowing || expanded;
+
   return (
     <section id={`chip-group-${id}`} className="flex flex-col gap-3">
       <h2 className="font-sans text-caption font-semibold uppercase tracking-[0.08em] text-ink-faint">
         {label}
       </h2>
 
-      <div className="flex flex-wrap gap-2">
+      <div
+        ref={wrapRef}
+        className="flex flex-wrap gap-2 overflow-hidden transition-[max-height] duration-300 ease-out"
+        style={{ maxHeight: expanded ? 2000 : capPx }}
+      >
         {allOptions.map((opt) => {
           const selectedState = isSelected(opt.value);
           const custom = isCustom(opt.value);
@@ -196,6 +242,16 @@ export function ChipGroup({
           </div>
         )}
       </div>
+
+      {showToggle && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="focus-ring -mt-1 self-start rounded text-caption text-ink-muted underline decoration-ink-faint decoration-1 underline-offset-4 hover:text-ink"
+        >
+          {expanded ? "Show fewer" : "Show all"}
+        </button>
+      )}
     </section>
   );
 }

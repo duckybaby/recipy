@@ -129,18 +129,29 @@ export default function Form() {
   return (
     <>
       {/* Sticky top header — pins the title + "surprise me" link as you scroll.
-          Tighter top inset than other pages since the header now stays in view. */}
+          Tighter top inset than other pages since the header now stays in view.
+          On md+ the primary CTA also lives here (right cluster, inline-left of
+          the theme toggle) and the mobile sticky-bottom CTA is hidden. */}
       <div
         className="sticky top-0 z-20 bg-paper/60 backdrop-blur-lg"
         style={{ paddingTop: "max(env(safe-area-inset-top), 20px)" }}
       >
-        <header className="mx-auto max-w-md px-5 pb-2">
-          {/* Title + theme toggle on the same row. Toggle is small and lives
-              right-aligned so the title still reads as the dominant element. */}
+        <header className="mx-auto max-w-md px-5 pb-2 md:max-w-[1100px] md:px-8 lg:px-10">
+          {/* Title + right-cluster. Right-cluster on md+ is [CTA · toggle];
+              on phone it's just the toggle. */}
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-title">What are we cooking?</h1>
-            <div className="-mr-2 mt-1 shrink-0">
-              <ThemeToggle />
+            <div className="mt-1 flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={findRecipes}
+                className="btn-primary btn-primary-compact focus-ring hidden md:inline-flex"
+              >
+                Find recipes
+              </button>
+              <div className="-mr-2">
+                <ThemeToggle />
+              </div>
             </div>
           </div>
           <p className="mt-2 text-body text-ink-muted">
@@ -157,8 +168,11 @@ export default function Form() {
         </header>
       </div>
 
-      <main className="mx-auto max-w-md px-5 pt-6 pb-32">
-        <div className="flex flex-col gap-10">
+      <main className="mx-auto max-w-md px-5 pt-6 pb-32 md:max-w-[1100px] md:px-8 md:pt-10 md:pb-16 lg:px-10">
+        {/* Chip-group container: stacked column on phone, 2-up tablet,
+            3-up desktop. Vertical gap a touch larger than horizontal so
+            section titles still read as anchors when wrapping. */}
+        <div className="chip-stagger flex flex-col gap-10 md:grid md:grid-cols-2 md:gap-x-10 md:gap-y-12 lg:grid-cols-3">
           <ChipGroup
             id="meal"
             label="Meal"
@@ -243,12 +257,13 @@ export default function Form() {
         </div>
       </main>
 
-      {/* Sticky bottom CTA — anchored above iOS home indicator.
-          Translucent + blurred to match the top header, and with a generous
-          bottom buffer so the orange CTA shadow has room to render without
-          getting clipped by Safari's URL chrome. */}
+      {/* Sticky bottom CTA — phone only (md:hidden). Anchored above iOS home
+          indicator. Translucent + blurred to match the top header, with a
+          generous bottom buffer so the orange CTA shadow has room to render
+          without getting clipped by Safari's URL chrome. On md+ the CTA
+          lives in the header right-cluster instead. */}
       <div
-        className="pointer-events-none fixed inset-x-0 z-20"
+        className="pointer-events-none fixed inset-x-0 z-20 md:hidden"
         style={{ bottom: 0 }}
       >
         {/* Soft fade so scrolling content doesn't cut sharply */}

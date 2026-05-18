@@ -278,7 +278,7 @@ export default function Recipe() {
 
   if (!recipe) {
     return (
-      <main className="mx-auto max-w-md px-5 pt-8 pb-12 safe-pt safe-pb">
+      <main className="mx-auto max-w-md px-5 pt-8 pb-12 safe-pt safe-pb md:max-w-2xl md:px-8 lg:px-10">
         <p className="text-strong text-ink-muted">
           We couldn't find that recipe.
         </p>
@@ -522,16 +522,18 @@ export default function Recipe() {
 
   return (
     <>
-      <main className="pb-40">
+      <main className="pb-40 lg:pb-16">
         {/* Sticky top bar — single blur region. When the in-flow tabs scroll
             past, a second copy of the TabStrip slides in inside this same
-            wrapper, so the blur stays one continuous surface (no seam). */}
+            wrapper, so the blur stays one continuous surface (no seam).
+            Hidden at lg+: back / share / kebab render inside the left panel,
+            tabs are sticky in the right panel. No top bar on desktop. */}
         <div
           ref={topBarRef}
-          className="sticky top-0 z-30 bg-paper/60 backdrop-blur-lg"
+          className="sticky top-0 z-30 bg-paper/60 backdrop-blur-lg lg:hidden"
           style={{ paddingTop: "max(env(safe-area-inset-top), 8px)" }}
         >
-          <div className="mx-auto flex max-w-md items-center gap-1 px-3 pb-2">
+          <div className="mx-auto flex max-w-md items-center gap-1 px-3 pb-2 md:max-w-2xl md:px-8 lg:px-10">
             <button
               type="button"
               aria-label="Back to results"
@@ -574,196 +576,278 @@ export default function Recipe() {
 
           {/* In-bar tabs — fade in only after the in-flow tabs have scrolled
               fully past the top bar (sentinel sits *below* the in-flow strip).
-              Same blur region as the rest of the bar, so no visible boundary. */}
+              Same blur region as the rest of the bar, so no visible boundary.
+              Capped at the same width as the in-flow copy on md+ so the
+              indicator doesn't jump x-position when one fades to the other.
+              Hidden entirely at lg+ — the desktop two-column layout has the
+              in-flow tabs sticky in their own column, so no in-bar copy. */}
           <div
             aria-hidden={!tabsInBar}
-            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out lg:hidden ${
               tabsInBar
                 ? "grid-rows-[1fr] opacity-100"
                 : "grid-rows-[0fr] opacity-0"
             }`}
           >
             <div className="overflow-hidden">
-              <TabStrip
-                active={activeTab}
-                onChange={handleTabChange}
-                tabIndex={tabsInBar ? 0 : -1}
-              />
+              <div className="mx-auto md:max-w-2xl">
+                <TabStrip
+                  active={activeTab}
+                  onChange={handleTabChange}
+                  tabIndex={tabsInBar ? 0 : -1}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Identity block — plain white. Holds title, source, pills, pairs,
-            make-ahead. */}
-        <section>
-          <div className="mx-auto max-w-md px-5 pt-4 pb-6">
-            {/* layoutId matches the Results card's title so Framer animates
-                the morph from card → page header when the user taps in.
-                Deep links (no source card mounted) just render in place — no
-                animation, no error. */}
-            <motion.h1
-              ref={inPageTitleRef}
-              layoutId={`recipe-title-${recipe.id}`}
-              className="text-title leading-tight text-ink"
-            >
-              {recipe.title}
-            </motion.h1>
+        {/* Page body — single column < lg, 1:3 sticky-left grid at lg+.
+            Left aside: action row / identity / stats / make-ahead / inline
+            CTA. Right column: tabs + tab content. Both panels float (no
+            card / border), separated by the grid gap. Both pin at top-0
+            with internal pt-6 — the padding lives *inside* the sticky
+            elements so the frosted tabs bg extends to the viewport edge
+            (no scroll-through gap). */}
+        <div className="lg:mx-auto lg:max-w-[1280px] lg:grid lg:grid-cols-[1fr_3fr] lg:gap-x-6 lg:px-8 xl:px-10">
 
-            {/* Everything below the title fades in while the title morphs
-                into position from the Results card. */}
-            <div className="recipe-body-fade">
-            <p className="mt-3 text-caption text-ink-muted">
-              Source:{" "}
-              <a
-                href={recipe.source.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="focus-ring underline decoration-ink-disabled underline-offset-2 hover:decoration-ink"
+          {/* LEFT panel — sticky on lg+ so identity / stats / CTA stay
+              anchored while the right column scrolls. self-start keeps the
+              aside the height of its content (CSS grid otherwise stretches
+              children to row height, which breaks sticky). pt-6 is internal
+              to the sticky element so the action row keeps its breathing
+              room whether at rest or pinned. */}
+          <aside className="lg:sticky lg:top-0 lg:self-start lg:pt-6">
+            {/* Action row — desktop only. Replaces the TopBar's controls
+                (back / share / kebab). Same handlers as the mobile bar. */}
+            <div className="hidden items-center justify-between lg:mb-4 lg:flex">
+              <button
+                type="button"
+                aria-label="Back to results"
+                onClick={back}
+                className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
               >
-                {recipe.source.siteName}
-              </a>
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="pill pill-secondary">
-                {sentence(recipe.difficulty.label)}
-              </span>
-              {recipe.dietFlags.map((flag) => (
-                <span key={flag} className="pill pill-secondary">
-                  {flag}
-                </span>
-              ))}
-            </div>
-
-            {recipe.pairsWith && recipe.pairsWith.length > 0 && (
-              <p className="mt-4 text-body text-ink-muted">
-                Pairs well with {recipe.pairsWith.join(", ")}.
-              </p>
-            )}
-
-            {/* Alternate-recipe affordance — shown when the recipe carries
-                a previousVersion (set by onDifferentRecipe). The link opens
-                the comparison view (built in M2). */}
-            {recipe.previousVersion && (
-              <p className="mt-4 text-caption text-ink-muted">
-                Alternate recipe ·{" "}
+                <ArrowLeft size={20} />
+              </button>
+              <div className="flex items-center">
                 <button
                   type="button"
-                  onClick={onComparePrevious}
-                  className="focus-ring text-ink-muted underline underline-offset-2 hover:text-ink"
+                  aria-label="Share"
+                  onClick={() => showToast("Share — wired post-v1.")}
+                  className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink-muted"
                 >
-                  compare with previous recipe
+                  <Share2 size={18} />
                 </button>
-              </p>
+                <button
+                  type="button"
+                  aria-label="More actions"
+                  onClick={() => setKebabOpen(true)}
+                  className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
+                >
+                  <MoreVertical size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Identity block — plain white. Holds title, source, pills, pairs. */}
+            <section>
+              <div className="mx-auto max-w-md px-5 pt-4 pb-6 md:max-w-2xl md:px-8 lg:max-w-none lg:px-0 lg:pt-0 lg:pb-0">
+                {/* layoutId matches the Results card's title so Framer animates
+                    the morph from card → page header when the user taps in.
+                    Both use `text-title` on phone and `text-card-title` on md+,
+                    so the morph is translate-only at every breakpoint. */}
+                <motion.h1
+                  ref={inPageTitleRef}
+                  layoutId={`recipe-title-${recipe.id}`}
+                  className="text-title leading-tight text-ink md:text-card-title"
+                >
+                  {recipe.title}
+                </motion.h1>
+
+                {/* Everything below the title fades in while the title morphs
+                    into position from the Results card. */}
+                <div className="recipe-body-fade">
+                <p className="mt-3 text-caption text-ink-muted">
+                  Source:{" "}
+                  <a
+                    href={recipe.source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="focus-ring underline decoration-ink-disabled underline-offset-2 hover:decoration-ink"
+                  >
+                    {recipe.source.siteName}
+                  </a>
+                </p>
+
+                {/* Pills start Group B (tags + pairs description). At lg+
+                    bump the gap above so the visual break between Group A
+                    (title + source) and Group B is clearer. */}
+                <div className="mt-4 flex flex-wrap gap-2 lg:mt-8">
+                  <span className="pill pill-secondary">
+                    {sentence(recipe.difficulty.label)}
+                  </span>
+                  {recipe.dietFlags.map((flag) => (
+                    <span key={flag} className="pill pill-secondary">
+                      {flag}
+                    </span>
+                  ))}
+                </div>
+
+                {recipe.pairsWith && recipe.pairsWith.length > 0 && (
+                  <p className="mt-4 text-body text-ink-muted">
+                    Pairs well with {recipe.pairsWith.join(", ")}.
+                  </p>
+                )}
+
+                {/* Alternate-recipe affordance — shown when the recipe carries
+                    a previousVersion (set by onDifferentRecipe). The link opens
+                    the comparison view (built in M2). */}
+                {recipe.previousVersion && (
+                  <p className="mt-4 text-caption text-ink-muted">
+                    Alternate recipe ·{" "}
+                    <button
+                      type="button"
+                      onClick={onComparePrevious}
+                      className="focus-ring text-ink-muted underline underline-offset-2 hover:text-ink"
+                    >
+                      compare with previous recipe
+                    </button>
+                  </p>
+                )}
+
+                </div>
+              </div>
+            </section>
+
+            {/* Stats — 4×1 horizontal strip on phone/tablet (border-y only,
+                edge-to-edge); 2×2 grid on desktop with a full perimeter
+                border + cross-pattern internal dividers. At lg+ we clear the
+                phone divide-x and re-attach left/top borders explicitly to
+                the cells that need them, so the reflow lands clean. */}
+            <div className="recipe-body-fade mx-auto border-y border-line md:max-w-2xl lg:mt-8 lg:max-w-none lg:border">
+              <dl className="mx-auto grid max-w-md grid-cols-4 divide-x divide-line text-center md:max-w-none lg:grid-cols-2 lg:divide-x-0 lg:[&>:nth-child(2)]:border-l lg:[&>:nth-child(2)]:border-line lg:[&>:nth-child(4)]:border-l lg:[&>:nth-child(4)]:border-line lg:[&>:nth-child(n+3)]:border-t lg:[&>:nth-child(n+3)]:border-line">
+                <Metric icon={<Clock size={14} />} label="Prep">
+                  {recipe.times.prepMinutes}m
+                </Metric>
+                <Metric icon={<Flame size={14} />} label="Cook">
+                  {recipe.times.cookMinutes}m
+                </Metric>
+                <Metric icon={<Users size={14} />} label="Serves">
+                  {servings}
+                </Metric>
+                <Metric icon={<Zap size={14} />} label="Cal">
+                  {recipe.calories.perServing}K
+                </Metric>
+              </dl>
+            </div>
+
+            {/* Make-ahead nudge — sits between stats and tabs on phone (or
+                between stats and the CTA on desktop, since tabs live in
+                the right column at lg+). */}
+            {recipe.makeAhead && !makeAheadDismissed && (
+              <div className="recipe-body-fade mx-auto max-w-md px-5 pt-5 md:max-w-2xl md:px-8 lg:max-w-none lg:px-0">
+                <MakeAheadCard
+                  text={recipe.makeAhead}
+                  onDismiss={() => setMakeAheadDismissed(true)}
+                />
+              </div>
             )}
 
+            {/* Inline CTA — desktop only. Bottom of the left panel where the
+                user expects the primary action when the identity column is
+                the anchor. Sticky-bottom CookingCTA is hidden at lg+. */}
+            <div className="mt-6 hidden lg:block">
+              <CtaButton variant={ctaVariant} onTap={onCtaTap} />
+            </div>
+          </aside>
+
+          {/* RIGHT panel — tabs + tab content. No card / border — same as
+              the left panel, floating content with the grid gap separating. */}
+          <div>
+            {/* In-flow tabs — anchored to the content they control. A sentinel
+                placed at the *bottom* edge tells us when the strip has fully
+                scrolled under the top bar; only then does the in-bar copy fade
+                in (phone/tablet only — at lg+ the strip becomes sticky inside
+                the right column so the in-bar copy is unnecessary).
+                lg: pins at top-0 so the frosted bg reaches the viewport edge
+                — pt-6 lives inside so the tab buttons keep their offset while
+                the frost covers the area content would otherwise scroll through. */}
+            <div
+              ref={inFlowTabsRef}
+              className="recipe-body-fade bg-paper lg:sticky lg:top-0 lg:z-10 lg:bg-paper/70 lg:pt-6 lg:backdrop-blur-lg"
+            >
+              <div className="mx-auto max-w-md md:max-w-2xl lg:max-w-none">
+                <TabStrip
+                  active={activeTab}
+                  onChange={handleTabChange}
+                  tabIndex={tabsInBar ? -1 : 0}
+                />
+              </div>
+            </div>
+            <div ref={tabSentinelRef} aria-hidden className="h-px lg:hidden" />
+
+            {/* Tab content — `min-h-[100dvh]` keeps each panel at least the full
+                viewport tall, so switching between tabs never causes the page to
+                collapse and bounce the scroll position. Tall content (e.g. a
+                20-step recipe) still extends naturally past it.
+                `overflow-x-hidden` clips the slide-out so the page never gets a
+                horizontal scrollbar mid-animation. */}
+            <div className="recipe-body-fade relative mx-auto min-h-[100dvh] max-w-md overflow-x-hidden px-5 pt-5 md:max-w-2xl md:px-8 lg:max-w-none lg:px-0">
+              <AnimatePresence
+                mode="popLayout"
+                initial={false}
+                custom={tabDirection}
+              >
+                <motion.div
+                  key={activeTab}
+                  custom={tabDirection}
+                  variants={TAB_SLIDE_VARIANTS}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+                >
+                  {activeTab === "recipe" && (
+                    <RecipeTab
+                      recipe={recipe}
+                      substitutions={substitutions}
+                      substitutionsLoading={substitutionsLoading}
+                      appliedSubs={appliedSubs}
+                      onApplySubstitute={applySubstitute}
+                      onResetSubstitute={resetSubstitute}
+                      onFindAlternate={onDifferentRecipe}
+                      alternateBusy={actionBusy === "different"}
+                    />
+                  )}
+                  {activeTab === "equipment" && (
+                    <EquipmentTab items={recipe.equipment} />
+                  )}
+                  {activeTab === "ingredients" && (
+                    <IngredientsTab
+                      recipe={recipe}
+                      servings={servings}
+                      setServings={setServings}
+                      substitutions={substitutions}
+                      appliedSubs={appliedSubs}
+                      onApplySubstitute={applySubstitute}
+                      onResetSubstitute={resetSubstitute}
+                      selectedForInstamart={selectedForInstamart}
+                      onToggleSelection={toggleIngredientSelection}
+                      instamartChecked={instamartChecked}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
-        </section>
-
-        {/* Stats — edge-to-edge section, hairline strokes top + bottom and
-            vertical dividers between the four equal cells. */}
-        <div className="recipe-body-fade border-y border-line">
-          <dl className="mx-auto grid max-w-md grid-cols-4 divide-x divide-line text-center">
-            <Metric icon={<Clock size={14} />} label="Prep">
-              {recipe.times.prepMinutes}m
-            </Metric>
-            <Metric icon={<Flame size={14} />} label="Cook">
-              {recipe.times.cookMinutes}m
-            </Metric>
-            <Metric icon={<Users size={14} />} label="Serves">
-              {servings}
-            </Metric>
-            <Metric icon={<Zap size={14} />} label="Cal">
-              {recipe.calories.perServing}K
-            </Metric>
-          </dl>
-        </div>
-
-        {/* Make-ahead nudge — sits between stats and tabs so the editorial
-            identity block stays clean, and the user sees timing context
-            (prep/cook/serves/calories) before the warning lands. */}
-        {recipe.makeAhead && !makeAheadDismissed && (
-          <div className="recipe-body-fade mx-auto max-w-md px-5 pt-5">
-            <MakeAheadCard
-              text={recipe.makeAhead}
-              onDismiss={() => setMakeAheadDismissed(true)}
-            />
-          </div>
-        )}
-
-        {/* In-flow tabs — anchored to the content they control. A sentinel
-            placed at the *bottom* edge tells us when the strip has fully
-            scrolled under the top bar; only then does the in-bar copy fade in,
-            so there's no moment where two strips are visible at once. */}
-        <div ref={inFlowTabsRef} className="recipe-body-fade bg-paper">
-          <div className="mx-auto max-w-md">
-            <TabStrip
-              active={activeTab}
-              onChange={handleTabChange}
-              tabIndex={tabsInBar ? -1 : 0}
-            />
-          </div>
-        </div>
-        <div ref={tabSentinelRef} aria-hidden className="h-px" />
-
-        {/* Tab content — `min-h-[100dvh]` keeps each panel at least the full
-            viewport tall, so switching between tabs never causes the page to
-            collapse and bounce the scroll position. Tall content (e.g. a
-            20-step recipe) still extends naturally past it.
-            `overflow-x-hidden` clips the slide-out so the page never gets a
-            horizontal scrollbar mid-animation. */}
-        <div className="recipe-body-fade relative mx-auto min-h-[100dvh] max-w-md overflow-x-hidden px-5 pt-5">
-          <AnimatePresence
-            mode="popLayout"
-            initial={false}
-            custom={tabDirection}
-          >
-            <motion.div
-              key={activeTab}
-              custom={tabDirection}
-              variants={TAB_SLIDE_VARIANTS}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
-            >
-              {activeTab === "recipe" && (
-                <RecipeTab
-                  recipe={recipe}
-                  substitutions={substitutions}
-                  substitutionsLoading={substitutionsLoading}
-                  appliedSubs={appliedSubs}
-                  onApplySubstitute={applySubstitute}
-                  onResetSubstitute={resetSubstitute}
-                  onFindAlternate={onDifferentRecipe}
-                  alternateBusy={actionBusy === "different"}
-                />
-              )}
-              {activeTab === "equipment" && (
-                <EquipmentTab items={recipe.equipment} />
-              )}
-              {activeTab === "ingredients" && (
-                <IngredientsTab
-                  recipe={recipe}
-                  servings={servings}
-                  setServings={setServings}
-                  substitutions={substitutions}
-                  appliedSubs={appliedSubs}
-                  onApplySubstitute={applySubstitute}
-                  onResetSubstitute={resetSubstitute}
-                  selectedForInstamart={selectedForInstamart}
-                  onToggleSelection={toggleIngredientSelection}
-                  instamartChecked={instamartChecked}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
         </div>
       </main>
 
-      {/* Bottom CTA — full pill at rest, morphs to ChefHat FAB on scroll. */}
-      <CookingCTA mode={ctaMode} variant={ctaVariant} onTap={onCtaTap} />
+      {/* Sticky-bottom CTA — full pill / FAB on phone, always-on pill on md.
+          Hidden entirely at lg+ since the inline CtaButton in the left panel
+          takes its place. */}
+      <div className="lg:hidden">
+        <CookingCTA mode={ctaMode} variant={ctaVariant} onTap={onCtaTap} />
+      </div>
 
       {/* Kebab actions */}
       <ActionSheet
@@ -923,7 +1007,7 @@ function MakeAheadCard({
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
-      <p className="flex-1 text-body text-warning-800">{text}</p>
+      <p className="flex-1 text-caption text-warning-800">{text}</p>
       <button
         type="button"
         onClick={onDismiss}
@@ -945,17 +1029,24 @@ function MakeAheadCard({
  *                 selected), or "add" (white Add to cart, after check
  *                 has been run). White variants share the cart icon for
  *                 the FAB collapse.
+ *
+ * On lg+ the entire sticky-bottom mechanism is hidden via a wrapper;
+ * the same `CtaButton` is rendered inline inside the left panel of the
+ * desktop two-column layout.
  */
 type CtaVariant = "cook" | "check" | "add";
 
-function CookingCTA({
-  mode,
+/** Shared visual for the "Start cooking / Check Instamart / Add to cart"
+    button. Used by the sticky-bottom CookingCTA and by the inline CTA
+    that sits inside the Recipe page's left panel at lg+. */
+function CtaButton({
   variant,
   onTap,
+  className = "",
 }: {
-  mode: "full" | "fab";
   variant: CtaVariant;
   onTap: () => void;
+  className?: string;
 }) {
   const isInstamart = variant !== "cook";
   const label =
@@ -970,15 +1061,55 @@ function CookingCTA({
       : variant === "check"
         ? "Check Instamart for selected ingredients"
         : "Add to Instamart cart";
+  return (
+    <button
+      type="button"
+      onClick={onTap}
+      aria-label={aria}
+      className={`focus-ring inline-flex w-full items-center justify-center gap-2 rounded-button font-semibold transition-colors ${
+        isInstamart
+          ? "border border-line bg-paper text-accent shadow-soft hover:bg-accent-soft hover:text-accent-strong"
+          : "btn-primary"
+      } ${className}`}
+      style={
+        isInstamart
+          ? { minHeight: 56, fontSize: 17, letterSpacing: "-0.005em" }
+          : undefined
+      }
+    >
+      {isInstamart && <ShoppingCart size={18} aria-hidden />}
+      {label}
+    </button>
+  );
+}
+
+function CookingCTA({
+  mode,
+  variant,
+  onTap,
+}: {
+  mode: "full" | "fab";
+  variant: CtaVariant;
+  onTap: () => void;
+}) {
+  const isInstamart = variant !== "cook";
+  const aria =
+    variant === "cook"
+      ? "Start cooking"
+      : variant === "check"
+        ? "Check Instamart for selected ingredients"
+        : "Add to Instamart cart";
 
   return (
     <div
       className="pointer-events-none fixed inset-x-0 z-20"
       style={{ bottom: 0 }}
     >
-      {/* Full pill — fades + slides out of the way in FAB mode. */}
+      {/* Full pill — fades + slides out of the way in FAB mode on phone.
+          On md+ we pin the pill open and hide the FAB: persistent CTAs
+          read as "desktop app", scroll-to-collapse reads as "mobile". */}
       <div
-        className={`transition-all duration-200 ease-out ${
+        className={`transition-all duration-200 ease-out md:translate-y-0 md:opacity-100 md:pointer-events-auto ${
           mode === "full"
             ? "translate-y-0 opacity-100"
             : "pointer-events-none translate-y-4 opacity-0"
@@ -990,33 +1121,20 @@ function CookingCTA({
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
         >
           <div className="mx-auto max-w-md px-5 pt-2 pb-2">
-            <button
-              type="button"
-              onClick={onTap}
-              aria-label={aria}
-              className={`focus-ring inline-flex w-full items-center justify-center gap-2 rounded-button font-semibold transition-colors ${
-                isInstamart
-                  ? "border border-line bg-paper text-accent shadow-soft hover:bg-accent-soft hover:text-accent-strong"
-                  : "btn-primary"
-              } ${mode === "full" ? "pointer-events-auto" : ""}`}
-              style={
-                isInstamart
-                  ? { minHeight: 56, fontSize: 17, letterSpacing: "-0.005em" }
-                  : undefined
-              }
-            >
-              {isInstamart && <ShoppingCart size={18} aria-hidden />}
-              {label}
-            </button>
+            <CtaButton
+              variant={variant}
+              onTap={onTap}
+              className={mode === "full" ? "pointer-events-auto" : ""}
+            />
           </div>
         </div>
       </div>
 
-      {/* FAB — fades + slides up when full pill collapses. White circle
-          with cart icon when in an Instamart variant; tomato circle with
-          ChefHat for the default cook variant. */}
+      {/* FAB — fades + slides up when full pill collapses (phone only).
+          Forced hidden on md+ via the md: overrides since the persistent
+          pill takes its place. */}
       <div
-        className="absolute right-5"
+        className="absolute right-5 md:hidden"
         style={{ bottom: "max(env(safe-area-inset-bottom), 16px)" }}
       >
         <button
@@ -1097,7 +1215,7 @@ function RecipeTab({
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-strong leading-relaxed text-ink">
+              <p className="mt-0.5 text-strong leading-relaxed text-ink lg:text-step">
                 {text}
               </p>
             </li>
@@ -1238,7 +1356,7 @@ function EquipmentTab({ items }: { items: string[] }) {
     );
   }
   return (
-    <ul className="grid grid-cols-2 gap-3">
+    <ul className="grid grid-cols-2 gap-3 lg:grid-cols-3">
       {items.map((it) => (
         <li
           key={it}

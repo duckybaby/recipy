@@ -80,9 +80,3 @@ export function scaleAndFormat(
   if (!ingredient.unit) return `${qty} ${ingredient.name}`;
   return `${qty} ${ingredient.unit} ${ingredient.name}`;
 }
-
-/** Round display values per "round numbers always" (spec §1 rule 4). */
-export function roundForDisplay(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n);
-}

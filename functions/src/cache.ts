@@ -56,7 +56,11 @@ function db(): FirebaseFirestore.Firestore {
   return dbHandle;
 }
 
-/** Stable hash of the filter object, ignoring key order. Cache key. */
+/** Stable hash of the filter object, ignoring key order. Cache key.
+ *  similarTo is lowercased so "Tomato soup" and "tomato soup" share a
+ *  cache slot — without normalization a user could whitespace-shuffle the
+ *  same query into N distinct cache entries (mild cache-pollution vector
+ *  + wasted Anthropic spend on what's effectively the same lookup). */
 export function hashFilters(filters: SearchFilters): string {
   const canonical = {
     meal: [...filters.meal].sort(),
@@ -67,7 +71,7 @@ export function hashFilters(filters: SearchFilters): string {
     vibes: [...filters.vibes].sort(),
     mainIngredients: [...filters.mainIngredients].sort(),
     surprise: filters.surprise,
-    similarTo: filters.similarTo ?? null,
+    similarTo: filters.similarTo?.toLowerCase() ?? null,
   };
   return createHash("sha256")
     .update(JSON.stringify(canonical))

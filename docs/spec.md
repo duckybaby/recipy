@@ -13,7 +13,7 @@ For the technical architecture (stack, state, routing, deployment) see [`archite
 Rules that beat any other instinct. If a later section seems to contradict one of these, the directive wins.
 
 1. **The keyboard never opens.** No free-text inputs in v1. Every choice is a tap on a chip, button, or stepper. Custom chips on Form are the one exception — users can add their own option (e.g. "Korean") via a small `+` affordance, and a single text field opens just long enough to capture it.
-2. **Mobile-first.** Design the phone view first. Tablet and desktop scale up by widening margins. She'll be using this on her phone in the kitchen.
+2. **Mobile-first, but real on bigger screens.** Design the phone view first — she'll be using this on her phone in the kitchen. Tablet and desktop reflow the same components via Tailwind responsive prefixes (no separate component trees): Form's chip grid goes 1-up → 2-up at `md` → 3-up at `lg`; Results' card list does the same; Recipe restructures into a 1:3 sticky-left grid at `lg+`. Stay typographic — no imagery is added at any breakpoint. See §5.4 for the layout details.
 3. **One screen, one job.** Form picks filters. Results picks a recipe. Recipe commits. Cooking cooks. Never blend them.
 4. **Round numbers always.** Anything displayed (servings, calories, times, prices) rounds for human reading. No `0.30000000000000004` artifacts.
 5. **No accounts, but local persistence is mandatory.** V1 has no login and no cross-device sync, but state that matters (active recipe, cooking progress, recent recipes, filter selections) survives tab kills, browser closes, refreshes, and OS-level memory pressure. See [`architecture.md`](./architecture.md) for the state model. V2 adds Firestore + accounts.
@@ -239,10 +239,20 @@ Tailwind v4 `@theme` block in `src/styles/index.css`:
 
 ### Layout
 
-- Max content width: `max-w-md` (28 rem) on phone. Wider viewports widen margins, not the content column.
+Breakpoints are Tailwind defaults: `md` 768 / `lg` 1024 / `xl` 1280. Apply via responsive prefixes inside existing components — no parallel desktop tree.
+
+| Breakpoint | Form | Results | Recipe |
+|---|---|---|---|
+| `< md` (phone) | `max-w-md`, 1-up chips, sticky bottom CTA | `max-w-md`, 1-up cards | Single column, sticky bottom CTA, in-bar tab swap |
+| `md` (tablet) | `max-w-[1100px]`, 2-up chips, CTA moves into header | `max-w-[1100px]`, 2-up cards | Same as phone, wider margins, larger loader/illustrations |
+| `lg` (desktop) | 3-up chips | 3-up cards | 1:3 sticky-left grid at `max-w-[1280px]`: aside (action row · identity · stats · make-ahead · inline CTA) + right column (sticky frosted tabs · tab content). Stats reflow 4×1 → 2×2 |
+
+Other constants:
+
 - Safe-area aware: every sticky top bar uses `paddingTop: max(env(safe-area-inset-top), 8px)`; sticky bottom CTAs use `paddingBottom: max(env(safe-area-inset-bottom), 16px)`.
 - Tap targets: minimum 44 × 44 px (Apple HIG). Chips that fall short get extra padding.
 - Border radius: 8 px standard (`rounded-card`), 999 px for pills (`rounded-button`).
+- PWA `display_override: ["window-controls-overlay", "standalone"]` so the installed app on desktop opens chromeless.
 
 ### Unit display rounding
 

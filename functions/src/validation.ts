@@ -13,13 +13,27 @@ import { z } from "zod";
 // We accept those alongside the canonical enums so the schema doesn't
 // reject the user's own additions — the frontend strips the prefix for
 // display, and the prompt builder feeds them to Claude as natural-language
-// hints.
+// hints. The custom payload is capped at 60 chars and stripped of
+// newlines / control chars — these strings get interpolated directly
+// into the LLM prompt, so we don't want a user smuggling instruction-like
+// text through a chip value.
+const CUSTOM_MAX = 60;
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
 function enumOrCustom<T extends string>(canonical: readonly T[]) {
   const set = new Set<string>(canonical);
   return z.string().refine(
-    (val) => set.has(val) || /^custom:.+/.test(val),
+    (val) => {
+      if (set.has(val)) return true;
+      if (!val.startsWith("custom:")) return false;
+      const payload = val.slice("custom:".length);
+      return (
+        payload.length > 0 &&
+        payload.length <= CUSTOM_MAX &&
+        !CONTROL_CHAR_RE.test(payload)
+      );
+    },
     (val) => ({
-      message: `Expected one of [${canonical.join(", ")}] or "custom:<value>"; received "${val}"`,
+      message: `Expected one of [${canonical.join(", ")}] or "custom:<value>" (≤${CUSTOM_MAX} chars, no newlines); received "${val}"`,
     }),
   );
 }
@@ -84,6 +98,19 @@ const CookMaxSchema = z.union([
   z.null(),
 ]);
 
+// similarTo is free-form user text that gets interpolated into the LLM
+// user prompt (see `buildSearchUserPrompt`), so we sanitize before the
+// prompt builder ever sees it: strip control chars / newlines (which an
+// attacker would use to break out of the surrounding quotes and inject
+// instructions), trim, and cap at 80 chars. Pre-clean we hard-reject
+// anything over 500 chars so we don't allocate work on a giant payload.
+const SIMILAR_TO_MAX = 80;
+const SimilarToSchema = z
+  .string()
+  .max(500)
+  .transform((s) => s.replace(/[\u0000-\u001f\u007f]+/g, " ").trim())
+  .pipe(z.string().min(1).max(SIMILAR_TO_MAX));
+
 export const SearchFiltersSchema = z.object({
   meal: z.array(MealField).default([]),
   cuisines: z.array(CuisineField).default([]),
@@ -93,7 +120,7 @@ export const SearchFiltersSchema = z.object({
   vibes: z.array(VibeField).default([]),
   mainIngredients: z.array(MainIngredientField).default([]),
   surprise: z.boolean().default(false),
-  similarTo: z.string().optional(),
+  similarTo: SimilarToSchema.optional(),
 });
 
 export type SearchFilters = z.infer<typeof SearchFiltersSchema>;

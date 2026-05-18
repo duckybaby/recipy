@@ -2,6 +2,34 @@
 
 Ship log keyed by milestone. Commits referenced where useful. Most recent at the top.
 
+## M2.6 — Responsive layouts + security pass (May 2026)
+
+Two threads in one push: the PWA goes responsive on tablet/desktop (phone layout was the only one rendering before), and a security audit pass closes a handful of small backend surfaces.
+
+### Responsive layouts
+
+The whole app was mobile-only until now — desktop and tablet just showed the phone column centred on a sea of paper. Each screen now scales via Tailwind responsive prefixes (`md:`, `lg:`, `xl:`); no separate component trees. Breakpoints are Tailwind defaults: `md` 768 / `lg` 1024 / `xl` 1280.
+
+- **Form** — chip grid reflows 1-up → 2-up at `md` → 3-up at `lg`. Container caps at 1100px at `md+` (was `max-w-md` ~448px). Sticky-bottom Find Recipes CTA gets `md:hidden`; the same action moves into the header at `md+` to the left of the theme toggle. ChipGroup gains a 4-row cap with Show all / Show fewer, measured via ResizeObserver so it only appears when the chip set actually overflows.
+- **Results** — TopBar widens to match the grid; card list reflows 1/2/3-up at md/lg. Loader illustration scales up at `md+`. Card title scales `text-title → text-card-title` at `md+` and gets a third line, so the morph-to-Recipe-H1 stays translate-only.
+- **Recipe** — restructures into a 1:3 sticky-left grid at `lg+`, cap 1280px. Left aside floats (no card chrome) with action row / identity block / stats / make-ahead / inline CTA. Right column carries the tabs (sticky, frosted) + tab content. Stats reflow 4×1 → 2×2 with full perimeter border + cross-pattern dividers at `lg+`. Mobile sticky-bottom CTA hides at `lg+` in favour of an inline CTA at the bottom of the aside. Recipe step body type scales up to `text-step` at `lg+`. Sticky elements pin at `top-0` with internal `pt-6` so the frosted bg covers the full viewport edge — no scroll-through gap above the tabs.
+- **PWA** — `manifest.webmanifest` adds `display_override: ["window-controls-overlay", "standalone"]` so the installed app on desktop opens chromeless with the title-bar area available to the React shell.
+
+### Security pass
+
+Audit surfaced a handful of small surfaces; all addressed.
+
+- **Prompt-injection guards on user-supplied LLM inputs.** `similarTo` is now sanitized in zod (`functions/src/validation.ts`): control chars/newlines stripped, trimmed, capped at 80 chars, with a 500-char hard reject pre-clean. Custom-chip values (`custom:<value>`) are capped at 60 chars and reject control chars. Without these, a user could close the surrounding quotes in the prompt template and inject instruction-like text — outputs land in the Firestore cache so a successful poison could affect other identical-filter queries.
+- **Backend error messages no longer leak.** The unhandled-error middleware in `functions/src/index.ts` now returns a generic `internal_error` for 500s. CORS rejections still surface the rejected origin so DevTools debugging stays sane — that's the caller's own origin, not internal state.
+- **Cache key normalized.** `hashFilters()` lowercases `similarTo` before hashing — `"Tomato soup"` and `"tomato soup"` now share a slot. Closes a mild cache-pollution / Anthropic-spend-amplification vector.
+- **CSP + companion security headers** added to `firebase.json` (`X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` locking down camera/mic/geo/FLoC, and a `Content-Security-Policy` with `'self'` defaults plus narrow allowlists for Google Fonts, Firebase App Check, and reCAPTCHA). `script-src` carries `'unsafe-inline'` for the inline theme-init script in `index.html`; the XSS surface stays small because React escapes by default and the app has no `dangerouslySetInnerHTML`. `frame-ancestors 'none'` blocks clickjacking.
+- **`dist/` Finder dupes** (`* 2.js`, `index 2.html`, etc.) deleted. `dist/` was already gitignored — these were local-only.
+- **Dependency refresh** in `functions/` via `npm update`. 9 LOW-severity advisories remain — all transit through `@tootallnate/once <3.0.1` deep inside `firebase-admin`'s dep tree. `npm audit fix --force` would downgrade `firebase-admin` to v10 (worse). Upstream-blocked.
+
+### Cleanup
+
+- Removed `roundForDisplay()` from `scaling.ts` and `findMockRecipe()` from `mockRecipes.ts` — both exported but with zero callers. Updated the stale "M1: rows render but recovery flows aren't wired up" comment in `FeedbackSheet.tsx` (they've been wired since M2 polish).
+
 ## M2.5 — Dark mode + security hardening (May 2026)
 
 [`ebbde95`](https://github.com/duckybaby/recipy/commit/ebbde95) — Two unrelated fronts in one push: dark mode rolled out across the whole UI, and Patch 3 (security/a11y/cost-ceiling) landed in the backend + workflow.

@@ -570,7 +570,3 @@ export const MOCK_RECIPES: Recipe[] = [
     ],
   },
 ];
-
-export function findMockRecipe(id: string): Recipe | undefined {
-  return MOCK_RECIPES.find((r) => r.id === id);
-}

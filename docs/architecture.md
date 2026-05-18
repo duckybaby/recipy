@@ -194,6 +194,46 @@ The rules deploy via the same GitHub Actions workflow as hosting + functions, co
 
 `functions/src/validation.ts` is the zod source of truth for `Recipe`, `Ingredient`, `Step`, `SearchFilters`, and the request bodies for each endpoint. Every incoming filter set and every outgoing recipe is validated against it. Recipes that fail validation are dropped silently — better to return fewer than to ship a malformed one.
 
+Two of the fields are free-form user text that eventually lands inside an LLM prompt template, so zod also sanitizes them at the entry boundary:
+
+- `similarTo` (search bias) — strips control chars / newlines, trims, caps at 80 chars; 500-char hard reject pre-clean. Without this, a user could close the surrounding `"..."` quotes in the prompt template and inject instruction-like text. Sanitization happens via `.transform().pipe()` so the parsed type is the cleaned value.
+- `custom:<value>` chip values — capped at 60 chars, control chars rejected. Same threat model, smaller surface (each custom chip is one short label).
+
+Successfully poisoned recipes would land in the Firestore cache and affect other identical-filter queries, so this matters more than the immediate spend impact.
+
+### Security headers
+
+`firebase.json` ships four response headers on every hosted asset:
+
+| Header | Value | Why |
+|---|---|---|
+| `X-Content-Type-Options` | `nosniff` | Stops browsers MIME-sniffing a CSS/JSON response into an executable script. |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Don't leak the full URL (which may carry a recipe id) to third parties. |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), interest-cohort=()` | App doesn't use these; lock them off so a future XSS can't either. `interest-cohort=()` also opts out of FLoC. |
+| `Content-Security-Policy` | see below | Defence-in-depth against script injection, framing, exfil. |
+
+The CSP:
+
+```
+default-src 'self';
+script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com;
+style-src  'self' 'unsafe-inline' https://fonts.googleapis.com;
+font-src   'self' https://fonts.gstatic.com;
+img-src    'self' data:;
+connect-src 'self' https://firebaseappcheck.googleapis.com https://www.google.com;
+frame-src  https://www.google.com;
+object-src 'none';
+base-uri   'self';
+form-action 'self';
+frame-ancestors 'none';
+```
+
+`'unsafe-inline'` is on `script-src` because of the inline theme-init script in `<head>` of `index.html` (synchronous read of `localStorage` before React mounts, to avoid a white-flash on dark loads). Migrating to a script-hash would mean recomputing the hash on every edit; not worth the maintenance overhead for an app with no `dangerouslySetInnerHTML` and no third-party HTML rendering. `'unsafe-inline'` on `style-src` covers React's inline `style="..."` attrs and Framer Motion's transform writes.
+
+The narrow allowlist covers Google Fonts (CSS + font files), Firebase App Check, and reCAPTCHA v3 (script + iframe + XHR). Anything else is blocked.
+
+CSP violations are visible in the browser console — if a future addition needs a new origin, you'll see the block before users do.
+
 ## Deployment
 
 GitHub Actions (`.github/workflows/firebase-hosting-merge.yml`) deploys hosting, functions, AND Firestore rules on every push to `main`:

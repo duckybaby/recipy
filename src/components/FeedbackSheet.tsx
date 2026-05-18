@@ -1,8 +1,8 @@
 // "Something looks wrong?" bottom sheet (spec §5.2).
 //
-// M1: rows render but recovery flows aren't wired up yet — tapping a row
-// closes the sheet without action. M2 will wire each row to its endpoint
-// (refetch, recompute, alternate source, etc.).
+// Each row maps to a recovery flow handled in Recipe.tsx's onFeedbackSelect:
+// steps/ingredients mismatches trigger find-alternate-source; calories/time
+// errors call /api/recompute-field; "not what I want" just navigates back.
 //
 // Entry/exit is a 160ms ease-out slide from the bottom, with the overlay
 // crossfading. Matches ActionSheet so both bottom sheets feel identical.

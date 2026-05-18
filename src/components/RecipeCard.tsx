@@ -13,8 +13,10 @@ import type { Recipe } from "../lib/types";
 
 // The h3 title carries a `layoutId` matching the Recipe page's H1, so
 // Framer Motion animates the title's position and width when the user
-// taps in (forward direction). Both use identical typography
-// (`text-title leading-tight`) so no font scaling is needed.
+// taps in (forward direction). The card and the Recipe H1 use the same
+// type token at each breakpoint so the morph is translate-only:
+//   • phone (<md): both at `text-title` (~28–36px)
+//   • md+:        both at `text-card-title` (~18–22px)
 //
 // On POP-driven mounts (user just hit back from Recipe → Results), we drop
 // the layoutId so Framer doesn't run a competing reverse-morph while
@@ -37,7 +39,7 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
     >
       <motion.h3
         layoutId={enableMorph ? `recipe-title-${recipe.id}` : undefined}
-        className="line-clamp-2 text-title leading-tight text-ink"
+        className="line-clamp-2 text-title leading-tight text-ink md:line-clamp-3 md:text-card-title"
       >
         {recipe.title}
       </motion.h3>
