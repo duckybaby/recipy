@@ -618,8 +618,13 @@ export default function Recipe() {
               room whether at rest or pinned. */}
           <aside className="lg:sticky lg:top-0 lg:self-start lg:pt-6">
             {/* Action row — desktop only. Replaces the TopBar's controls
-                (back / share / kebab). Same handlers as the mobile bar. */}
-            <div className="hidden items-center justify-between lg:mb-4 lg:flex">
+                (back / share / kebab). Same handlers as the mobile bar.
+                lg:py-2 makes the row 56px tall (40px button + 16px padding)
+                — same intrinsic height as a tab button (py-4 + text-strong
+                ~= 56px). With flex items-center, the icons end up vertically
+                centered to the tab labels in the right column. Without this
+                the 40px-tall row sat 8px higher than the 56px-tall tabs. */}
+            <div className="hidden items-center justify-between lg:mb-4 lg:flex lg:py-2">
               <button
                 type="button"
                 aria-label="Back to results"
