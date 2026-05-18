@@ -87,7 +87,20 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(corsMiddleware);
-app.use(express.json({ limit: "1mb" }));
+// Parse JSON bodies. `type` is expanded beyond the default `application/json`
+// so the browser's CSP-report POSTs (Content-Type: application/csp-report or
+// application/reports+json) come through populated on req.body rather than
+// silently dropped.
+app.use(
+  express.json({
+    limit: "1mb",
+    type: [
+      "application/json",
+      "application/csp-report",
+      "application/reports+json",
+    ],
+  }),
+);
 
 // Tiny request logger — helps debug from the Cloud Run logs. Also logs
 // req.ip so we can verify trust-proxy is reading the real client IP
@@ -426,6 +439,35 @@ app.post(
 // ----- Health check -----
 app.get("/api/health", readLimiter, (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
+});
+
+// ----- CSP report endpoint -----
+//
+// Browsers POST here when a Content-Security-Policy directive is violated
+// (configured via `report-uri /api/csp-report` in the CSP header in
+// firebase.json). Both the legacy `application/csp-report` envelope and
+// the modern `application/reports+json` array are accepted — the JSON
+// middleware is configured to handle both content-types.
+//
+// We never block on a CSP report. The endpoint logs the violation as a
+// structured log line so Cloud Logging surfaces real breakages without
+// needing a separate reporting service. App Check is skipped for this
+// path (see appCheck.ts) because browser-issued reports don't carry app
+// tokens. Rate-limited like a read so a misconfigured policy on a single
+// page-load can't cost-amplify on us.
+app.post("/api/csp-report", readLimiter, (req, res) => {
+  // Legacy shape:  { "csp-report": { "violated-directive": ..., ... } }
+  // Modern shape:  [{ type: "csp-violation", body: { ... } }, ...]
+  console.warn(
+    JSON.stringify({
+      type: "csp_violation",
+      report: req.body,
+      ua: req.header("user-agent") ?? null,
+      at: new Date().toISOString(),
+    }),
+  );
+  // 204 — no body, browser doesn't care about the response.
+  res.status(204).end();
 });
 
 // ----- 404 + error -----

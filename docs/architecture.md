@@ -203,11 +203,13 @@ Successfully poisoned recipes would land in the Firestore cache and affect other
 
 ### Security headers
 
-`firebase.json` ships four response headers on every hosted asset:
+`firebase.json` ships six response headers on every hosted asset:
 
 | Header | Value | Why |
 |---|---|---|
 | `X-Content-Type-Options` | `nosniff` | Stops browsers MIME-sniffing a CSS/JSON response into an executable script. |
+| `X-Frame-Options` | `DENY` | Legacy clickjacking shield. Modern browsers honour `frame-ancestors 'none'` in the CSP; this covers the long tail. |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` | 2-year HSTS, preload-ready. Stops a first-connect downgrade on a new device/network. Submit to `hstspreload.org` after a few weeks of stable deploy. |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Don't leak the full URL (which may carry a recipe id) to third parties. |
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), interest-cohort=()` | App doesn't use these; lock them off so a future XSS can't either. `interest-cohort=()` also opts out of FLoC. |
 | `Content-Security-Policy` | see below | Defence-in-depth against script injection, framing, exfil. |
@@ -234,7 +236,9 @@ frame-ancestors 'none';
 
 `img-src` allows `www.gstatic.com` for the reCAPTCHA badge.
 
-CSP violations are visible in the browser console — if a future addition needs a new origin, you'll see the block before users do.
+`report-uri /api/csp-report` points violations at the Cloud Function endpoint of the same name. The endpoint logs reports as structured `csp_violation` lines to Cloud Logging — no external reporting service needed. App Check is skipped for the endpoint (`appCheck.ts`) because browser-issued report POSTs don't carry app tokens. The endpoint is rate-limited like a read (30/min/IP).
+
+CSP violations are also visible in the browser console — but the report-uri means breakage you don't catch first-hand still surfaces in logs.
 
 ## Deployment
 

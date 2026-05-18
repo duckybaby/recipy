@@ -30,6 +30,11 @@ export async function verifyAppCheck(
   // Allow the health endpoint through (handy for uptime probes).
   if (req.path === "/api/health") return next();
 
+  // CSP reports are sent by the browser's reporting infrastructure, not by
+  // our page JS. They can't carry an App Check token. Skip enforcement so
+  // the browser can post a violation without 401-ing.
+  if (req.path === "/api/csp-report") return next();
+
   const token = req.header("X-Firebase-AppCheck");
   if (!token) {
     if (ENFORCE_APP_CHECK && !IS_EMULATOR) {

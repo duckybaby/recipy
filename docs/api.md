@@ -235,6 +235,36 @@ The accompanying recovery (refetch, recompute, etc.) is the client's responsibil
 
 ---
 
+## POST /api/csp-report
+
+Infra endpoint — not called by app code. The browser POSTs here automatically when a Content-Security-Policy directive is violated (configured via `report-uri /api/csp-report` in the CSP header in `firebase.json`).
+
+### Request body
+
+Either of:
+
+```jsonc
+// Legacy `application/csp-report`
+{ "csp-report": { "violated-directive": "...", "blocked-uri": "...", ... } }
+
+// Modern `application/reports+json`
+[ { "type": "csp-violation", "body": { ... } } ]
+```
+
+Both content-types are accepted by the JSON middleware.
+
+### Response
+
+`204 No Content`. Browsers ignore the body either way.
+
+### Notes
+
+- **App Check skipped** — browser-issued reports don't carry app tokens.
+- **Read-limited** (30/min/IP) so a misconfigured policy on a single page-load can't cost-amplify on us.
+- Reports surface in Cloud Logging as structured `csp_violation` log lines — search Cloud Logging for `type="csp_violation"` to triage real breakages.
+
+---
+
 ## Models and limits
 
 - Search + alternate-source: Claude Sonnet 4.6 with `web_search_20250305`.

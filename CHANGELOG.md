@@ -2,6 +2,15 @@
 
 Ship log keyed by milestone. Commits referenced where useful. Most recent at the top.
 
+## M2.6.1 — Security headers follow-up (May 2026)
+
+Small follow-up after the M2.6 security audit. Four items: one real gap, three defence-in-depth.
+
+- **HSTS landed.** `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` on every hosted response. Without it, a first-connect over plain `http://` on a new device or network could be MITM'd before the Firebase Hosting redirect to HTTPS lands. Two-year max-age, ready for `hstspreload.org` submission after a few weeks of stable deploys.
+- **`X-Frame-Options: DENY`** added alongside the existing CSP `frame-ancestors 'none'`. Modern browsers honour the CSP directive; the legacy header covers the long tail.
+- **CSP reporting wired up.** `report-uri /api/csp-report` directive added to the CSP. New `POST /api/csp-report` endpoint in the Cloud Function accepts both legacy `application/csp-report` and modern `application/reports+json` envelopes, logs them as structured `csp_violation` lines to Cloud Logging, returns `204`. App Check is skipped for the path (browser-issued reports don't carry app tokens); read-limited at 30/min/IP so a misconfigured policy can't cost-amplify. JSON middleware extended to accept both CSP MIME types.
+- **Cache-key consistency.** `hashFilters` in `functions/src/cache.ts` now lowercases the payload of every `custom:` chip (e.g. `"custom:Italian"` and `"custom:italian"` share a slot) the same way `similarTo` already does. Casing variants no longer fan out into separate Anthropic calls for the same lookup.
+
 ## M2.6 — Responsive layouts + security pass (May 2026)
 
 Two threads in one push: the PWA goes responsive on tablet/desktop (phone layout was the only one rendering before), and a security audit pass closes a handful of small backend surfaces.

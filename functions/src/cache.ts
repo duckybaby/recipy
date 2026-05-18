@@ -57,19 +57,25 @@ function db(): FirebaseFirestore.Firestore {
 }
 
 /** Stable hash of the filter object, ignoring key order. Cache key.
- *  similarTo is lowercased so "Tomato soup" and "tomato soup" share a
- *  cache slot — without normalization a user could whitespace-shuffle the
- *  same query into N distinct cache entries (mild cache-pollution vector
- *  + wasted Anthropic spend on what's effectively the same lookup). */
+ *  similarTo is lowercased and so are the payloads of any `custom:` chip
+ *  values so "custom:Italian" and "custom:italian" share a cache slot
+ *  — without that, casing variants would fan out into separate Anthropic
+ *  calls for what's effectively the same lookup. Canonical enum values
+ *  (already lowercase per validation.ts) are left untouched. */
+function normalizeChip(val: string): string {
+  if (!val.startsWith("custom:")) return val;
+  return "custom:" + val.slice("custom:".length).toLowerCase();
+}
+
 export function hashFilters(filters: SearchFilters): string {
   const canonical = {
-    meal: [...filters.meal].sort(),
-    cuisines: [...filters.cuisines].sort(),
-    diet: [...filters.diet].sort(),
+    meal: [...filters.meal].map(normalizeChip).sort(),
+    cuisines: [...filters.cuisines].map(normalizeChip).sort(),
+    diet: [...filters.diet].map(normalizeChip).sort(),
     prepMax: filters.prepMax,
     cookMax: filters.cookMax,
-    vibes: [...filters.vibes].sort(),
-    mainIngredients: [...filters.mainIngredients].sort(),
+    vibes: [...filters.vibes].map(normalizeChip).sort(),
+    mainIngredients: [...filters.mainIngredients].map(normalizeChip).sort(),
     surprise: filters.surprise,
     similarTo: filters.similarTo?.toLowerCase() ?? null,
   };
