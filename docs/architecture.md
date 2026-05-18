@@ -219,8 +219,8 @@ default-src 'self';
 script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com;
 style-src  'self' 'unsafe-inline' https://fonts.googleapis.com;
 font-src   'self' https://fonts.gstatic.com;
-img-src    'self' data:;
-connect-src 'self' https://firebaseappcheck.googleapis.com https://www.google.com;
+img-src    'self' data: https://www.gstatic.com;
+connect-src 'self' https://*.googleapis.com https://www.google.com;
 frame-src  https://www.google.com;
 object-src 'none';
 base-uri   'self';
@@ -230,7 +230,9 @@ frame-ancestors 'none';
 
 `'unsafe-inline'` is on `script-src` because of the inline theme-init script in `<head>` of `index.html` (synchronous read of `localStorage` before React mounts, to avoid a white-flash on dark loads). Migrating to a script-hash would mean recomputing the hash on every edit; not worth the maintenance overhead for an app with no `dangerouslySetInnerHTML` and no third-party HTML rendering. `'unsafe-inline'` on `style-src` covers React's inline `style="..."` attrs and Framer Motion's transform writes.
 
-The narrow allowlist covers Google Fonts (CSS + font files), Firebase App Check, and reCAPTCHA v3 (script + iframe + XHR). Anything else is blocked.
+`connect-src` is wildcarded to `https://*.googleapis.com` because the Firebase Web SDK calls *several* `*.googleapis.com` endpoints on init — Installations (`firebaseinstallations.googleapis.com`) is required before App Check (`firebaseappcheck.googleapis.com`) can mint a token, and Remote Config / Firestore would add more. Listing each one explicitly is brittle (each Firebase SDK addition risks a fresh prod break); the wildcard still blocks non-Google origins.
+
+`img-src` allows `www.gstatic.com` for the reCAPTCHA badge.
 
 CSP violations are visible in the browser console — if a future addition needs a new origin, you'll see the block before users do.
 
