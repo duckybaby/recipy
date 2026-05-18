@@ -16,27 +16,30 @@ Rules that beat any other instinct. If a later section seems to contradict one o
 2. **Mobile-first, but real on bigger screens.** Design the phone view first — she'll be using this on her phone in the kitchen. Tablet and desktop reflow the same components via Tailwind responsive prefixes (no separate component trees): Form's chip grid goes 1-up → 2-up at `md` → 3-up at `lg`; Results' card list does the same; Recipe restructures into a 1:3 sticky-left grid at `lg+`. Stay typographic — no imagery is added at any breakpoint. See §5.4 for the layout details.
 3. **One screen, one job.** Form picks filters. Results picks a recipe. Recipe commits. Cooking cooks. Never blend them.
 4. **Round numbers always.** Anything displayed (servings, calories, times, prices) rounds for human reading. No `0.30000000000000004` artifacts.
-5. **No accounts, but local persistence is mandatory.** V1 has no login and no cross-device sync, but state that matters (active recipe, cooking progress, recent recipes, filter selections) survives tab kills, browser closes, refreshes, and OS-level memory pressure. See [`architecture.md`](./architecture.md) for the state model. V2 adds Firestore + accounts.
+5. **Single account, hard-gated.** v1 requires Google sign-in (M3). Persistent session via Firebase Auth's default `browserLocalPersistence` — once she signs in, she stays signed in across reboots, browser updates, and schema migrations. Local persistence (active recipe, cooking progress, recent recipes, filter selections) survives tab kills, browser closes, refreshes, and OS-level memory pressure. Account-level data (preferences, saved recipes, custom chips) syncs to Firestore so it follows the user across devices. See [`architecture.md`](./architecture.md) for the state model and the three-database split.
 6. **The recipe is found, not invented.** Every recipe originates from a real recipe website, fetched by Claude via web search, and links back with attribution. Hallucinated URLs are unacceptable.
-7. **Cooking mode is offline-capable.** Once she enters cooking mode, the recipe lives in localStorage. She can lose internet, swap to YouTube, take a call, even reboot — the steps and timer still work when she returns. (M3 scope.)
+7. **Cooking mode is offline-capable.** Once she enters cooking mode, the recipe lives in localStorage. She can lose internet, swap to YouTube, take a call, even reboot — the steps and timer still work when she returns. (M4 scope.)
 
 ---
 
 ## 2. User flow
 
 ```
-                  ┌── Resume banner (if a cook is in progress) ──┐
-                  ↓                                                │
-[Form]  →  [Results]  →  [Recipe]  →  [Cooking mode] ──────────────┘
-                              ↓                ↑
-                      (Start cooking) ─────────┘
+                                ┌── Resume banner (if a cook is in progress) ──┐
+                                ↓                                                │
+[Splash] → [Form] → [Results] → [Recipe] → [Cooking mode] ──────────────────────┘
+            ↑          ↑           ↓             ↑
+            │          │   (Start cooking) ──────┘
+            │          │
+            │          └── [Saved] ←─┐    via hamburger drawer
+            └──────────── [Preferences] ←┘
 ```
 
-Four screens, linear flow. Back navigation always returns to the previous screen with state preserved (selected chips on Form, scroll position and same recipes on Results).
+Splash gates everything — see §3.5. Past the gate, the linear cook-flow is Form → Results → Recipe → Cooking. The drawer (§3.6) provides lateral access to Saved and Preferences from any screen except Cooking. Back navigation always returns to the previous screen with state preserved (selected chips on Form, scroll position and same recipes on Results).
 
-The Recipe page exposes lateral actions: **More like this** (push to Results with a `similarTo` bias), **Find different recipe** (alternate source for the same dish, swapped in place), inline **Substitutions**, and a kebab-only **Something looks wrong?** sheet.
+The Recipe page exposes lateral actions: **More like this** (push to Results with a `similarTo` bias), **Find different recipe** (alternate source for the same dish, swapped in place), inline **Substitutions**, **Save** (heart button — M3), and a kebab-only **Something looks wrong?** sheet.
 
-**Resume flow** (M3): when the app loads, it checks for an in-progress cook in localStorage. If one exists and is less than 7 days old, a banner renders at the top of whatever screen is loading: "Resume your tomato rasam? Step 4 of 9 · [Resume] [Start fresh]". The banner does not block — she can ignore it and use the form normally. Tapping Resume goes straight to cooking mode at the right step.
+**Resume flow** (M4): when the app loads, it checks for an in-progress cook in localStorage. If one exists and is less than 7 days old, a banner renders at the top of whatever screen is loading: "Resume your tomato rasam? Step 4 of 9 · [Resume] [Start fresh]". The banner does not block — she can ignore it and use the form normally. Tapping Resume goes straight to cooking mode at the right step.
 
 ---
 
@@ -118,7 +121,7 @@ The most-changed screen during M2 polish. Long, scrollable, tab-organised.
 **Section order, top to bottom:**
 
 1. **Top bar (sticky, frosted, single blur region).** Back arrow · empty centre · Share icon · kebab (More actions). When the in-page H1 scrolls out of view, a compact title fades into the centre. When the in-page tab strip scrolls under the bar, a second copy of the tab strip fades in inside the bar (same blur, no seam).
-2. **Identity block (paper background).** Big H1 (the dish title), source attribution line ("Source: archanaskitchen.com" — opens in new tab), two pill rows (difficulty + diet flags), pairs-well-with line if applicable, "Alternate recipe · compare with previous recipe" link if a previousVersion exists (M2-only UI; the comparison view itself is M3).
+2. **Identity block (paper background).** Big H1 (the dish title), source attribution line ("Source: archanaskitchen.com" — opens in new tab), two pill rows (difficulty + diet flags), pairs-well-with line if applicable, "Alternate recipe · compare with previous recipe" link if a previousVersion exists (M2-only UI; the comparison view itself is M4).
 3. **Stats row** — four equal cells with hairline borders top + bottom and vertical dividers: Prep · Cook · Serves · kcal. The Serves cell mirrors the servings adjuster on the Ingredients tab.
 4. **Make-ahead nudge** — yellow card with the make-ahead text, shown only if `recipe.makeAhead` is non-null and the user hasn't dismissed it. "I've done this · dismiss" closes it for the session (persisted to `recipe-app:dismissed-makeahead`).
 5. **Tab strip (in-flow).** Recipe · Equipment · Ingredients. Active tab gets a tinted background; the strip has a continuous hairline underline through all three.
@@ -139,7 +142,7 @@ The most-changed screen during M2 polish. Long, scrollable, tab-organised.
 | Any | Not yet checked | White tinted-accent: "Check Instamart" with cart icon |
 | Any | Just ran the check | White tinted-accent: "Add to cart" with cart icon |
 
-Tapping `Check Instamart` runs the heuristic classification (every ingredient already carries `instamart.classification` from the initial API response) and jumps the user to the Ingredients tab so they see the result panel. Tapping `Add to cart` opens Instamart in a new tab with the items pre-queued at Royal Legend (M4).
+Tapping `Check Instamart` runs the heuristic classification (every ingredient already carries `instamart.classification` from the initial API response) and jumps the user to the Ingredients tab so they see the result panel. Tapping `Add to cart` opens Instamart in a new tab with the items pre-queued at Royal Legend (M5).
 
 **Kebab menu (More actions):**
 
@@ -148,9 +151,9 @@ Tapping `Check Instamart` runs the heuristic classification (every ingredient al
 
 The "Find different recipe" action is no longer in the kebab — it's an inline link inside the Recipe tab next to the source attribution. Found surprise-easier there during M2 testing.
 
-### 3.4 Cooking mode — M3 placeholder
+### 3.4 Cooking mode — M4 placeholder
 
-The current `Cooking.tsx` is a stub. M3 ships the real screen. The design intent below stands.
+The current `Cooking.tsx` is a stub. M4 ships the real screen. The design intent below stands.
 
 **Layout:**
 
@@ -184,6 +187,141 @@ On the first cooking-mode mount in a session, after the wake lock is established
 
 Tapping Allow calls `Notification.requestPermission()` and persists the choice in `recipe-app:notifications-prompt`. Tapping Not now suppresses the prompt for 30 days. The card auto-dismisses after a tap or 8 s of no interaction. Cooking mode works fully without notifications — they're one of four alert layers.
 
+### 3.5 Splash / sign-in — M3
+
+Before any other screen renders, recipy checks Firebase Auth. If a user is signed in (persistent session via the SDK's default `browserLocalPersistence` — IndexedDB-backed), they land directly on Form. If not, the splash takes the full viewport. This is a **hard gate** — the app does not work without an account.
+
+**Layout:**
+
+- Centred column, same `max-w-md` cap as Form.
+- App name "recipy" in Fraunces serif at `text-title` scale.
+- One-line tagline ("What are we cooking?").
+- Two-line value prop: "Find a real recipe, scale it for your household, walk through it step by step."
+- **Sign in with Google** button — uses Google's branded button per their identity guidelines (white background, Google G mark, "Sign in with Google" label).
+- Reassurance line at the bottom: "Your saved recipes and preferences live on your account."
+
+**Behaviour:**
+
+- The button calls `signInWithPopup(auth, googleProvider)`. On mobile where popups are blocked, falls back to `signInWithRedirect`.
+- On first successful sign-in, a `users/{uid}` document is created in `recipy-users` with the Google profile defaults (`displayName`, `email`, `photoURL`, `createdAt`) and an empty `preferences` object. Subsequent sign-ins skip the bootstrap.
+- The splash unmounts; the user lands on Form.
+- Auth persistence is the SDK default. No explicit `setPersistence` call needed.
+- On sign-out (drawer button) the auth state clears and the splash re-mounts.
+
+**Auth resolution timing:**
+
+`onAuthStateChanged` resolves from the IndexedDB cache in ~100 ms. During that resolve window, render a neutral loading state — *not* the splash. Showing the splash for a signed-in user who's about to be recognised would be a regression.
+
+**Offline:**
+
+- A user who's signed in once stays signed in across reboots, browser updates, schema migrations.
+- A first-time sign-in requires internet.
+
+### 3.6 Hamburger drawer — M3
+
+Global navigation accessible from every screen except Cooking mode. Cooking stays focused — no nav distractions mid-step.
+
+**Trigger:** hamburger icon top-left of the top bar on Form, Results, Recipe. On screens with an existing back arrow (Results, Recipe), the hamburger sits to the far left and the back arrow is next to it — two distinct slots, two distinct affordances.
+
+**Drawer content (top to bottom):**
+
+| Item | Notes |
+|---|---|
+| Profile photo + display name + email | Pulled from `auth.currentUser`. Header section. |
+| Find recipes | Active when on `/`. |
+| Saved recipes | → `/saved` |
+| Preferences | → `/preferences` |
+| (gap) | Pushes sign-out to the bottom. |
+| Sign out | Divider above. Confirmation dialog ("Sign out?") before `auth.signOut()`. |
+
+**Behaviour:**
+
+- Slides in from the left, takes 75–80% of viewport width on mobile.
+- Tap-outside or swipe-left closes.
+- Active nav item highlights subtly (accent-soft background).
+- Drawer state is not persisted — closes on navigation.
+
+**Desktop (`lg+`):**
+
+The drawer becomes a **permanent left rail** at ~280 px wide. The hamburger button hides. Form / Results / Recipe content shifts right to accommodate. Recipe's existing 1:3 grid becomes (rail · 1:3 content grid) inside the 1280 px cap.
+
+### 3.7 Preferences — M3
+
+A dedicated route at `/preferences` reachable via the drawer. Auto-saves on every change; small "Saved" toast on success, revert + error toast on Firestore write failure.
+
+**Sections, in order:**
+
+1. **Diet defaults** — same chip group as Form's Diet selector (multi-select; Vegetarian · Non-veg · Eggless · Vegan · Jain · + custom). The chips selected here become the default on Form. The user can override per-search.
+2. **Allergies** — custom chip group only (no presets). Each tag becomes a soft constraint in the search prompt: "avoid ingredients containing X".
+3. **Spice tolerance** — single-select chip group: Mild · Medium · Hot. Maps to a prompt hint.
+4. **Default time limits** — optional Prep / Cook ceilings. If set, Form pre-selects these.
+5. **Custom chips** — read-only display of every custom chip the user has added across Meal / Cuisine / Diet / Vibe / Main ingredient groups, with a small ⨯ to remove. Adding chips still happens on the Form via the existing `+` affordance.
+
+**Custom chip sync mechanism:**
+
+- Local cache stays in `recipe-app:custom-chips` (fast read, offline-safe).
+- Every chip add writes to BOTH localStorage AND `users/{uid}.preferences.customChips` in Firestore.
+- On first sign-in on a new device, Firestore custom chips merge into the local cache (union, no data loss).
+- On every app load post-sign-in, Firestore pulls into the local cache. Conflict resolution is set-union — chips are append-only and rarely conflict at our scale.
+
+**Data shape on the user doc:**
+
+```ts
+users/{uid}.preferences: {
+  diet: string[];                         // default for Form Diet chips
+  allergies: string[];                    // custom strings, e.g. ["peanuts"]
+  spiceTolerance: "mild" | "medium" | "hot" | null;
+  defaultPrepMaxMin: number | null;
+  defaultCookMaxMin: number | null;
+  customChips: {
+    meal: string[];
+    cuisines: string[];
+    diet: string[];
+    vibes: string[];
+    mainIngredients: string[];
+  };
+}
+```
+
+### 3.8 Saved recipes + the `recipy-list` library — M3
+
+Two surfaces plus the backend library.
+
+**Heart button** on the Recipe page (top-right of the top bar, next to the kebab):
+
+- Outlined heart when not saved. Filled heart (accent colour) when saved.
+- Tap: writes `users/{uid}/saved/{recipeId}` with denormalised fields (`title`, `siteName`, `savedAt`) so the list view doesn't need to fetch each full recipe.
+- Tap-again unsaves — deletes the doc. The underlying `recipy-list` document stays (other users may have saved it).
+
+**Saved route** at `/saved`:
+
+- Reverse-chronological list of the user's saved recipes (most recent first).
+- Each row: title (`text-card-title`), site name, saved date (relative — "saved Tuesday", "saved 3 weeks ago").
+- Tap a row → opens the recipe at `/recipe/:id`. The page first checks the Zustand store (in case of recent activity); if not found, reads from `recipy-list/recipes/{id}`.
+- Empty state: "Nothing saved yet. Tap the heart on any recipe."
+- Pull-to-refresh re-queries Firestore.
+
+**The `recipy-list` library:**
+
+Every recipe Anthropic returns gets upserted into `recipy-list/recipes/{normalizedUrlHash}` by the Cloud Function on every successful search. The upsert happens after `res.end()` (same pattern as the existing cache write) so it doesn't slow the response.
+
+Document shape mirrors the `Recipe` type plus:
+
+- `schemaVersion: number` — currently 1.
+- `addedAt: Timestamp`
+- `lastSeenAt: Timestamp` — updated on every upsert.
+- `deletedAt: Timestamp | null` — soft delete. Clients treat a deleted recipe as "this recipe is no longer available" with a graceful fallback.
+- `firstSeenIn: { filters: SearchFilters }` — debugging aid; not used for lookup.
+
+**Access:**
+
+- Authenticated users can `read` any `recipy-list` document (so Saved list view + Recipe page can resolve a recipe by ID across users).
+- Writes are admin-SDK only — clients never write directly. Same pattern as `recipy-cache`.
+
+**Why this enables the future search path:**
+
+Once `recipy-list` has a meaningful corpus (a few hundred recipes across common filter combinations), the search path can prefer library hits over Anthropic calls. Spec §7.2 will gain a third cache layer between `recipy-cache` (filter-keyed) and Anthropic (fresh fetch): `recipy-list` query by tags. Not in M3 scope — deferred. M3 only writes the library; reading from it for search comes later.
+
 ---
 
 ## 4. Recovery flows
@@ -198,7 +336,7 @@ The "Something looks wrong?" sheet is a bottom-sheet modal with five preset rows
 | Time is way off | Calls `/api/recompute-field` with `field: "time"`. Re-splits the new total proportionally into prep + cook. |
 | Just not what I want | Returns to Results so she can pick a different card. No fetch — uses the cached batch. |
 
-All five also fire a fire-and-forget `/api/feedback` event for the M5 source quality signal.
+All five also fire a fire-and-forget `/api/feedback` event for the M6 source quality signal.
 
 The inline **Find different recipe** link on the Recipe tab is the same flow as the first two reasons, fired explicitly rather than via the kebab. Calls `/api/find-alternate-source` excluding the current URL, holds onto the prior recipe as `previousVersion` (cap of one level deep), and replaces the slot in `lastSearch.recipes` so back nav reflects the swap.
 
@@ -217,7 +355,7 @@ Tailwind v4 `@theme` block in `src/styles/index.css`:
 | `paper` / `paper-soft` | Backgrounds | The main canvas. Subtle warm white. |
 | `ink` / `ink-muted` / `ink-disabled` | Text | Body, secondary, disabled. |
 | `accent` | Brand orange | Primary buttons, active chips, progress fills, regenerate icon. |
-| `success` | Green | Reserved for "available on Instamart" rows (M4). |
+| `success` | Green | Reserved for "available on Instamart" rows (M5). |
 | `warning` | Amber | Make-ahead nudges, missing-ingredient state. |
 | `line` | Hairlines | 1px borders, dividers, top-bar hairline. |
 
@@ -355,30 +493,30 @@ See [`architecture.md`](./architecture.md) for the full performance picture and 
 
 ---
 
-## 8. V2 hooks
+## 8. M3 hooks already in place + V2 backlog
 
-V1 has device-local persistence and no accounts. V2 adds the memory layer — favourites, dislikes, diet/pantry/notes, source quality signal, and cross-device sync via Firestore + auth. To keep v2 a hook-implementation swap rather than a rewrite, several seams already exist in v1:
+V1 ships through M2.6.1 with device-local persistence and the auth/account layer arriving in M3. Several seams already exist so M3 is filling stubs, not architecting from scratch:
 
-1. **`useUserContext()` hook** (`src/hooks/useUserContext.tsx`) — returns an empty context in v1. V2 reads from Firestore + auth. Components are wired to read from this hook even in v1.
-2. **`<UserContextProvider>`** — wraps the app in `App.tsx`. No-op in v1, populated in v2.
-3. **`/api/feedback`** — already in v1. Every event is logged today, even though v1 doesn't read them back. V2's source quality signal trains on this stream.
-4. **Storage adapter** — `src/lib/storage.ts` is the single entry point for non-store persistence. V2 swaps the file's internals for Firestore-backed reads/writes; call sites don't change.
-5. **Recipe-detail action slots** — header has room for a future "♡ Save" button (hidden via feature flag in v1).
-6. **Cooking-mode `onCookComplete(recipe)` hook** — M3 wires the no-op; v2 connects it to a "how did it turn out?" prompt.
+1. **`useUserContext()` hook** (`src/hooks/useUserContext.tsx`) — returns an empty context today. **M3 wires this to `auth.currentUser` + `users/{uid}` doc.** Components already read from this hook.
+2. **`<UserContextProvider>`** — wraps the app in `App.tsx`. No-op today; **M3 populates** with the live user object.
+3. **`/api/feedback`** — already in v1. Every event is logged today, even though v1 doesn't read them back. M6's source quality signal will train on this stream.
+4. **Storage adapter** — `src/lib/storage.ts` is the single entry point for non-store persistence. **M3 layers Firestore on top** for the slices that should sync (preferences, custom chips, saved recipes); cooking-state / recents stay local-only.
+5. **Recipe-detail action slots** — header has room for the heart "Save" button. **M3 unhides it** alongside Firebase Auth being live.
+6. **Cooking-mode `onCookComplete(recipe)` hook** — M4 wires the no-op; V2 connects it to a "how did it turn out?" prompt.
 
-### V2 backlog (do not build in v1)
+### V2 backlog (do not build before V2)
 
-- Memory / personalisation: favourites, cooked-before, dislikes, allergy + diet set-once, pantry memory, personal notes per recipe.
-- Cross-device sync via Firestore + auth (so her phone and tablet stay aligned).
+- Memory deepening beyond M3 prefs: cooked-before flag, dislikes, pantry memory, personal notes per recipe.
+- "How did it turn out?" feedback prompt after a completed cook.
 - Voice cooking mode: reads steps aloud, advances on "next" or tap-anywhere.
 - Active vs passive time distinction in metrics.
 - Combined-cart weekly meal planning.
 - Inline tips per step in cooking mode.
-- Service-worker offline cache for the app shell (broader than v1's `localStorage`-only offline cooking).
+- Service-worker offline cache for the app shell (broader than M4's `localStorage`-only offline cooking).
 - Source quality signal — Claude tags trusted sources, learned from v1's feedback stream.
 - Regional variation toggle — same dish, different regional style.
-- Saved recipes ("Library") view.
 - Recipe comparison view — uses the `previousVersion` data v1 is already collecting.
+- Multi-user / sharing: invite household members to share saved recipes + history.
 
 ---
 
@@ -411,7 +549,7 @@ Two paths. Path B (heuristic) ships in v1 because the MCP server's auth model is
 
 **Path A (preferred, when authentication is resolved):** the Cloud Function calls Anthropic with the Instamart MCP server attached via `mcp_servers`, scoped to the Royal Legend address. The model uses Instamart tools to check availability per ingredient and add to cart.
 
-**Path B (fallback, v1):** the search prompt already instructs Claude to classify each ingredient as `pantry-staple` / `likely-available` / `specialty` based on commonness in Indian kirana + supermarket retail. The Ingredients tab uses these classifications to drive the Check Instamart panel. The Add-to-cart CTA opens a search URL on instamart.com prefilled with the items rather than auto-adding to cart (M4).
+**Path B (fallback, v1):** the search prompt already instructs Claude to classify each ingredient as `pantry-staple` / `likely-available` / `specialty` based on commonness in Indian kirana + supermarket retail. The Ingredients tab uses these classifications to drive the Check Instamart panel. The Add-to-cart CTA opens a search URL on instamart.com prefilled with the items rather than auto-adding to cart (M5).
 
 The frontend never branches on which path is active — both return the same response shape from `/api/check-instamart` and `/api/add-to-instamart`. The backend has an `INSTAMART_MODE` env var (`"mcp" | "heuristic"`); ship in `heuristic`, flip to `mcp` once auth is sorted (post-v1).
 
@@ -442,7 +580,7 @@ The build is done when every one of these is true in production:
 11. Tapping a card opens the Recipe page with every section from §3.3 rendered (or correctly omitted per the rules).
 12. Source attribution opens the original recipe URL in a new tab.
 13. **Find alternate recipe** swaps the page content with a new recipe from a different source. URL rewrites to the new id. Back to Results shows the alternate in the card.
-14. The alternate carries a "compare with previous recipe" link (M2-only UI; comparison view itself is M3).
+14. The alternate carries a "compare with previous recipe" link (M2-only UI; comparison view itself is M4).
 15. Tab switches slide directionally and never collapse the page or bounce scroll.
 16. Sticky CTA shrinks to a ChefHat FAB on scroll-down past 200 px and expands back on 30% viewport-height of scroll-up.
 17. Servings adjuster scales ingredient quantities live. Calories and times do not change.
@@ -451,26 +589,43 @@ The build is done when every one of these is true in production:
 20. **Add to cart** opens Instamart in a new tab with the missing items pre-queued at Royal Legend.
 21. All of the "Something looks wrong?" reasons fire their recovery flow and a feedback event.
 
-### Cooking (M3)
+### Accounts & saving (M3)
 
-22. Start cooking enters cooking mode. The screen does not sleep while open (verify on a real phone).
-23. **Wake lock recovers after backgrounding.** Switch to YouTube for ≥30 s, return. Screen stays awake again.
-24. **Tab-kill resilience.** Force-close at step 4. Reopen the site. Resume banner shows "Step 4 of N"; Resume jumps back to step 4 in cooking mode.
-25. **Cooking mode works offline.** With cooking open, turn off wifi and mobile data. Every step (next, previous, timer) still works. No spinner, no error.
-26. **Timer alert is multi-channel.** Timer hits 0:00 with app backgrounded: phone vibrates AND system notification fires (if permission granted). Visual flash and audio chime fire when foregrounded.
-27. **Notifications permission asked once.** Inline card on first cook. Allow stores the result; Not now suppresses for 30 days. No native popup before the inline card.
-28. Done — well cooked clears the cooking state and returns to Recipe.
-29. **In-progress state expires after 7 days.** A cook started >7 days ago doesn't show a resume banner.
+22. **Splash gates the app.** A user with no auth state lands on the splash. Form / Results / Recipe / Cooking are all unreachable until Google sign-in completes.
+23. **Persistent session.** Sign in once. Close the tab. Reopen the site. No re-prompt. Quit the browser, reboot the phone. Still no re-prompt.
+24. **First-time bootstrap.** On a brand-new sign-in, a `users/{uid}` document appears in `recipy-users` with `displayName`, `email`, `photoURL`, `createdAt`, and an empty `preferences` object. Visible in Firestore console.
+25. **Drawer opens on every screen except Cooking.** Hamburger top-left, tap → drawer slides in. Profile photo + name at top, sign-out at bottom.
+26. **Sign-out returns to splash.** Tap Sign out in the drawer, confirm. Auth state clears, splash re-mounts.
+27. **Heart saves a recipe.** Tap the outlined heart on the Recipe page. It fills (accent colour). A doc appears at `users/{uid}/saved/{recipeId}` with title + siteName + savedAt.
+28. **Saved list survives reload.** Reload the app. Saved page shows the recipe in reverse-chronological order.
+29. **Cross-device sync.** Save a recipe on device A. Sign in on device B. The Saved list shows the same recipe within seconds.
+30. **Preference auto-save.** Toggle a diet chip on Preferences. The change writes to Firestore immediately (network tab confirms). No explicit Save button.
+31. **Custom chips sync.** Add "Korean" to Cuisines on Form (device A). Sign in on device B. The Cuisines group shows "Korean" as a custom chip.
+32. **Allergies bias the search.** Add "peanuts" to Preferences → Allergies. Run a search. The system prompt includes "avoid ingredients containing peanuts" (verify in Cloud Run logs).
+33. **`recipy-list` populates.** After one successful search, the recipes returned appear as documents in `recipy-list/recipes/` keyed by URL hash, with `addedAt` and `schemaVersion: 1`. Same search from a different account: existing docs get their `lastSeenAt` updated (no duplicates).
+34. **Firestore rules enforce ownership.** Attempt to read `users/<other-uid>/saved` from your own account in DevTools console. Result: `permission-denied`.
+35. **Offline read.** Sign in once. Go offline. Reload the app. Splash skips (cached auth), saved recipes list renders from Firestore's offline cache.
+
+### Cooking (M4)
+
+36. Start cooking enters cooking mode. The screen does not sleep while open (verify on a real phone).
+37. **Wake lock recovers after backgrounding.** Switch to YouTube for ≥30 s, return. Screen stays awake again.
+38. **Tab-kill resilience.** Force-close at step 4. Reopen the site. Resume banner shows "Step 4 of N"; Resume jumps back to step 4 in cooking mode.
+39. **Cooking mode works offline.** With cooking open, turn off wifi and mobile data. Every step (next, previous, timer) still works. No spinner, no error.
+40. **Timer alert is multi-channel.** Timer hits 0:00 with app backgrounded: phone vibrates AND system notification fires (if permission granted). Visual flash and audio chime fire when foregrounded.
+41. **Notifications permission asked once.** Inline card on first cook. Allow stores the result; Not now suppresses for 30 days. No native popup before the inline card.
+42. Done — well cooked clears the cooking state and returns to Recipe.
+43. **In-progress state expires after 7 days.** A cook started >7 days ago doesn't show a resume banner.
 
 ### Cross-cutting
 
-30. All numbers shown are integers or sensibly rounded — no float artifacts.
-31. Site loads under 3 s on a Pixel-class phone over 4G.
-32. The Anthropic API key is not in the client bundle (`grep -r "sk-ant" dist/` returns nothing).
-33. Cloud Function rejects requests without a valid App Check token (`401`/`403` as appropriate).
-34. CORS allowlist enforced — random origins return `403 Origin not allowed`.
-35. Works on a 380 px-wide viewport in portrait, landscape, and desktop.
-36. iOS Safari private mode degrades gracefully (in-memory fallback for storage).
+44. All numbers shown are integers or sensibly rounded — no float artifacts.
+45. Site loads under 3 s on a Pixel-class phone over 4G.
+46. The Anthropic API key is not in the client bundle (`grep -r "sk-ant" dist/` returns nothing).
+47. Cloud Function rejects requests without a valid App Check token (`401`/`403` as appropriate).
+48. CORS allowlist enforced — random origins return `403 Origin not allowed`.
+49. Works on a 380 px-wide viewport in portrait, landscape, and desktop.
+50. iOS Safari private mode degrades gracefully (in-memory fallback for storage).
 
 ---
 

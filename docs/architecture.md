@@ -16,11 +16,14 @@ The technical map of recipy. For product intent and screen-by-screen behaviour, 
 | Backend | Firebase Cloud Functions (Express, Node 20, 2nd gen) | in `asia-south1` |
 | API | `@anthropic-ai/sdk` (Sonnet 4.6 + `web_search_20250305`) | 0.96 |
 | Cache | Two-layer — in-memory Map + Firestore (`recipy-cache` named DB) | TTL 7d |
+| Library (M3) | Per-recipe documents in `recipy-list` named DB, keyed by normalised URL hash | every Anthropic response upserts |
+| Users (M3) | `recipy-users` named DB — profile + preferences + saved subcollection | one doc per `auth.uid` |
+| Auth (M3) | Firebase Auth — Google sign-in only, `browserLocalPersistence` | hard-gated splash entry |
 | Validation | `zod` | 3.x |
 | Rate limit | `express-rate-limit` per-IP, per-route | v8 |
 | Secrets | Firebase Secret Manager | `ANTHROPIC_API_KEY` |
 | Attestation | Firebase App Check (reCAPTCHA v3) | required on every API route |
-| Firestore rules | Client-side fully closed (admin-SDK bypasses) | see `firestore.rules` |
+| Firestore rules | Cache + List server-only; Users scoped per `auth.uid` | see `firestore.rules` |
 | Server runtime | `firebase-functions` v2 onRequest | v7 |
 | CI | GitHub Actions — auto-deploy on push to `main` | hosting + functions + firestore in one run |
 

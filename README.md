@@ -57,9 +57,11 @@ Full stack table in [`docs/architecture.md`](docs/architecture.md).
 | M2.1 | State refactor: Zustand store + intent-based loader + alt-recipe history | shipped |
 | M2.5 | Dark mode (Auto/Light/Dark) + closed Firestore rules + per-IP rate limiting + pinch-zoom | shipped |
 | M2.6 | Responsive layouts (Form / Results / Recipe at md/lg/xl) + CSP + prompt-injection guards | shipped |
-| M3 | Cooking mode: offline + wake lock + multi-channel timer alert | next |
-| M4 | Instamart Path B (heuristic cart deep-link) | |
-| M5 | Polish + acceptance criteria + custom domain hardening | |
+| M2.6.1 | HSTS + X-Frame-Options + CSP reporting + cache key normalisation | shipped |
+| M3 | Accounts (Google sign-in) + Preferences + Saved recipes + `recipy-list` library | next |
+| M4 | Cooking mode: offline + wake lock + multi-channel timer alert | |
+| M5 | Instamart Path B (heuristic cart deep-link) | |
+| M6 | Polish + acceptance criteria + custom domain hardening | |
 
 Detail and commit refs in [`CHANGELOG.md`](CHANGELOG.md).
 
