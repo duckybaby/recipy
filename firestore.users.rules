@@ -1,0 +1,37 @@
+// Firestore Security Rules for the `recipy-users` named database.
+//
+// Each user owns their own document tree under /users/{uid}. They can
+// read and write everything inside their own tree. They cannot see
+// anyone else's data.
+//
+// The Cloud Function (firebase-admin SDK) bypasses these rules for any
+// server-side admin operation we add later (e.g. cross-user analytics).
+//
+// Document shape (M3):
+//   /users/{uid}                          — profile + preferences
+//   /users/{uid}/saved/{recipeId}         — saved-recipe references
+//   /users/{uid}/cooks/{cookId}           — cooking history (M4)
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      // User can read + write their own root document.
+      allow read, write: if isOwner(uid);
+
+      // Any subcollection scoped to the same uid inherits the same rule.
+      match /{collection}/{doc} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // Everything outside /users/{uid}: closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+function isOwner(uid) {
+  return request.auth != null && request.auth.uid == uid;
+}

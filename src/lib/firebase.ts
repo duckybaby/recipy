@@ -1,9 +1,19 @@
-// Firebase client SDK init + App Check.
+// Firebase client SDK init + App Check + Auth + Firestore handles.
 //
 // App Check cryptographically attests that requests to our Cloud Function
 // come from this real web app on its real domain (via reCAPTCHA v3) —
 // not from curl, Postman, or a cloned deployment. The function rejects
 // requests without a valid App Check token (see functions/src/appCheck.ts).
+//
+// Auth (M3): Google sign-in only in v1. The SDK defaults to
+// `browserLocalPersistence` (IndexedDB-backed) so users stay signed in
+// across reboots, browser updates, and schema migrations.
+//
+// Firestore: three named databases — `recipy-cache` (server-only),
+// `recipy-list` (read for authed users), `recipy-users` (per-uid). The
+// client SDK only needs handles to the two it actually talks to:
+// `recipy-list` (read saved-recipe lookups) and `recipy-users`
+// (read/write profile + preferences + saved subcollection).
 //
 // The values in this file are public Firebase identifiers (not secrets):
 // the `apiKey` here identifies the project but does not grant access on
@@ -18,6 +28,8 @@ import {
   getToken,
   type AppCheck,
 } from "firebase/app-check";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 // In dev, the SDK will generate a debug token instead of calling reCAPTCHA
 // (which would fail on localhost without a public domain). The token is
@@ -31,7 +43,13 @@ if (import.meta.env.DEV) {
 
 const firebaseConfig = {
   apiKey: "AIzaSyCWfEfX4Bcs6c_iV022ahB4pb6sxYL5ad4",
-  authDomain: "recipy-63422.firebaseapp.com",
+  // Custom auth domain so the Google sign-in popup shows
+  // "Sign in to recipy.shankar.design" instead of the
+  // generic *.firebaseapp.com fallback. Firebase Hosting
+  // serves /__/auth/handler on the custom domain automatically;
+  // no extra config beyond adding the domain to the project's
+  // Authorized Domains list (Console → Authentication → Settings).
+  authDomain: "recipy.shankar.design",
   projectId: "recipy-63422",
   storageBucket: "recipy-63422.firebasestorage.app",
   messagingSenderId: "666083696337",
@@ -72,3 +90,21 @@ export async function getAppCheckToken(): Promise<string | null> {
     return null;
   }
 }
+
+// ===== Auth =====
+
+export const auth = getAuth(firebaseApp);
+
+// Single Google provider instance — the SDK is happy with one shared
+// across every sign-in call. We don't set custom OAuth scopes; the
+// default `profile email` is what we want (displayName + email +
+// photoURL come back on the user object).
+export const googleProvider = new GoogleAuthProvider();
+
+// ===== Firestore =====
+//
+// Two named databases the client talks to directly. `recipy-cache` is
+// server-only (Cloud Function admin SDK); no client handle needed.
+
+export const dbList = getFirestore(firebaseApp, "recipy-list");
+export const dbUsers = getFirestore(firebaseApp, "recipy-users");

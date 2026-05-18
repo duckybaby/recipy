@@ -1,9 +1,21 @@
 {
-  "firestore": {
-    "database": "recipy-cache",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
+  "firestore": [
+    {
+      "database": "recipy-cache",
+      "rules": "firestore.cache.rules",
+      "indexes": "firestore.cache.indexes.json"
+    },
+    {
+      "database": "recipy-list",
+      "rules": "firestore.list.rules",
+      "indexes": "firestore.list.indexes.json"
+    },
+    {
+      "database": "recipy-users",
+      "rules": "firestore.users.rules",
+      "indexes": "firestore.users.indexes.json"
+    }
+  ],
   "hosting": {
     "public": "dist",
     "ignore": [

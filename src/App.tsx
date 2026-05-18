@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { UserContextProvider } from "./hooks/useUserContext";
+import { AuthGate } from "./components/AuthGate";
 import { ResumeBanner } from "./components/ResumeBanner";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { PageTransition } from "./components/PageTransition";
@@ -18,16 +19,18 @@ import Cooking from "./routes/Cooking";
 export default function App() {
   return (
     <UserContextProvider>
-      {/* Reset scroll to top on every forward navigation — gives the app
-          a native mobile feel where tapping into a screen always starts
-          you at the top. Back/forward still restore. */}
-      <ScrollToTop />
+      <AuthGate>
+        {/* Reset scroll to top on every forward navigation — gives the app
+            a native mobile feel where tapping into a screen always starts
+            you at the top. Back/forward still restore. */}
+        <ScrollToTop />
 
-      {/* Global resume banner — appears on every screen if a cook is in
-          progress (spec §2). Cooking mode itself hides it. */}
-      <ResumeBanner />
+        {/* Global resume banner — appears on every screen if a cook is in
+            progress (spec §2). Cooking mode itself hides it. */}
+        <ResumeBanner />
 
-      <AnimatedRoutes />
+        <AnimatedRoutes />
+      </AuthGate>
     </UserContextProvider>
   );
 }

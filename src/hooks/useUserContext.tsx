@@ -1,37 +1,80 @@
-// V2 personalisation seam (spec §11).
+// User context — Firebase Auth state + (future) preferences.
 //
-// In v1 this returns an empty/no-op context. In v2 the provider will read
-// from Firestore + auth and populate favourites, allergies, pantry, etc.
-// Wire components to this hook even in v1 so v2 is a hook-implementation
-// swap, not a refactor.
+// M3 phase 2 ships this seam wired to live auth:
+//   - `user` is the Firebase Auth User (or null when signed out).
+//   - `loading` is true during the initial onAuthStateChanged resolve
+//     (~100ms from IndexedDB on cold start; longer on first-ever load).
+//   - `signOut()` clears the auth session.
+//
+// Later M3 phases add:
+//   - `preferences` (phase 4) — diet, allergies, spice, custom chips
+//   - `savedRecipeIds` (phase 5) — for the heart-toggle state
+//
+// Components read whichever slice they need via the same hook so future
+// growth doesn't require touching every consumer.
 
-import { createContext, useContext, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { onAuthStateChanged, signOut as fbSignOut, type User } from "firebase/auth";
+import { auth } from "../lib/firebase";
+import { ensureUserDoc } from "../lib/userBootstrap";
 
-export type UserContext = {
-  favourites: string[]; // recipe ids
-  cookedBefore: string[]; // recipe ids
-  allergies: string[];
-  pantry: string[];
-  notes: Record<string, string>; // recipeId → note
-  diet: string | null;
+export type UserContextValue = {
+  user: User | null;
+  loading: boolean;
+  signOut: () => Promise<void>;
 };
 
-const EMPTY: UserContext = {
-  favourites: [],
-  cookedBefore: [],
-  allergies: [],
-  pantry: [],
-  notes: {},
-  diet: null,
-};
-
-const Ctx = createContext<UserContext>(EMPTY);
+const Ctx = createContext<UserContextValue>({
+  user: null,
+  loading: true,
+  signOut: async () => {},
+});
 
 export function UserContextProvider({ children }: { children: ReactNode }) {
-  // V1: always empty. V2 will replace this with a Firestore-backed value.
-  return <Ctx.Provider value={EMPTY}>{children}</Ctx.Provider>;
+  const [user, setUser] = useState<User | null>(null);
+  // Start with `loading: true` so AuthGate can render a neutral spinner
+  // for the brief window before onAuthStateChanged fires. Firebase reads
+  // from IndexedDB on cold start; usually ~100ms.
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (next) => {
+      setUser(next);
+      setLoading(false);
+      if (next) {
+        // Fire-and-forget the bootstrap. Failures are logged inside
+        // ensureUserDoc; we don't gate the UI on it because a returning
+        // user's doc already exists and a first-time user's profile load
+        // (drawer photo + name) reads from `auth.currentUser`, not the
+        // Firestore doc.
+        void ensureUserDoc(next);
+      }
+    });
+    return unsub;
+  }, []);
+
+  // useMemo so the context value's identity is stable across renders
+  // that don't change user/loading. Consumers re-render only on actual
+  // state transitions.
+  const value = useMemo<UserContextValue>(
+    () => ({
+      user,
+      loading,
+      signOut: () => fbSignOut(auth),
+    }),
+    [user, loading],
+  );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-export function useUserContext(): UserContext {
+export function useUserContext(): UserContextValue {
   return useContext(Ctx);
 }
