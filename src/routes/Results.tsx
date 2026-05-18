@@ -252,7 +252,7 @@ export default function Results() {
           filtersSummary={summarizeFilters(filters)}
         />
         <main
-          className="mx-auto max-w-md px-5 pt-2 md:max-w-[1100px] md:px-8 lg:px-10"
+          className="mx-auto max-w-md px-5 pt-2 md:max-w-[1280px] md:px-8 lg:px-10"
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
         >
           <ErrorState message={phase.message} onRetry={retry} onBack={back} />
@@ -299,7 +299,7 @@ export default function Results() {
       />
 
       <main
-        className="mx-auto max-w-md px-5 pt-2 md:max-w-[1100px] md:px-8 md:pt-6 lg:px-10"
+        className="mx-auto max-w-md px-5 pt-2 md:max-w-[1280px] md:px-8 md:pt-6 lg:px-10"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
       >
         {recipes.length === 0 && phase.kind === "ready" ? (
@@ -346,7 +346,7 @@ function TopBar({
     >
       {/* Shared max-width wrapper so the action row and the filter-summary
           click area both align with the cards below at every breakpoint. */}
-      <div className="mx-auto max-w-md md:max-w-[1100px]">
+      <div className="mx-auto max-w-md md:max-w-[1280px]">
         <div className="flex items-center gap-1 px-3 md:px-8 lg:px-10">
           <button
             type="button"

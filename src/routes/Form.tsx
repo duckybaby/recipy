@@ -136,7 +136,7 @@ export default function Form() {
         className="sticky top-0 z-20 bg-paper/60 backdrop-blur-lg"
         style={{ paddingTop: "max(env(safe-area-inset-top), 20px)" }}
       >
-        <header className="mx-auto max-w-md px-5 pb-2 md:max-w-[1100px] md:px-8 lg:px-10">
+        <header className="mx-auto max-w-md px-5 pb-2 md:max-w-[1280px] md:px-8 lg:px-10">
           {/* Title + right-cluster. Right-cluster on md+ is [CTA · toggle];
               on phone it's just the toggle. */}
           <div className="flex items-start justify-between gap-3">
@@ -168,7 +168,7 @@ export default function Form() {
         </header>
       </div>
 
-      <main className="mx-auto max-w-md px-5 pt-6 pb-32 md:max-w-[1100px] md:px-8 md:pt-10 md:pb-16 lg:px-10">
+      <main className="mx-auto max-w-md px-5 pt-6 pb-32 md:max-w-[1280px] md:px-8 md:pt-10 md:pb-16 lg:px-10">
         {/* Chip-group container: stacked column on phone, 2-up tablet,
             3-up desktop. Vertical gap a touch larger than horizontal so
             section titles still read as anchors when wrapping. */}
