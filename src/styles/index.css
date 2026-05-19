@@ -327,12 +327,14 @@
   }
 
   /* Compact variant — for headers and tight desktop clusters. Drops the
-     w-full base, shrinks the min-height to 44px (still hit-target safe)
-     and tightens the font + padding so it reads as "secondary affordance
-     in a chrome row" rather than "the loudest thing on the page." */
+     w-full base, matches the 40px icon-button height used elsewhere in
+     the top bar so the row doesn't stretch, and tightens the font +
+     padding so it reads as "secondary affordance in a chrome row" rather
+     than "the loudest thing on the page." Wide text buttons keep enough
+     practical hit area at 40px tall. */
   .btn-primary-compact {
     width: auto;
-    min-height: 44px;
+    min-height: 40px;
     font-size: 15px;
     padding: 0 18px;
   }

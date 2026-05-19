@@ -524,55 +524,99 @@ export default function Recipe() {
   return (
     <>
       <main
-        className="pb-40 lg:!pt-0 lg:pb-16"
+        className="pb-40 lg:pb-16"
         style={{ paddingTop: topBarH }}
       >
-        {/* Fixed top bar — single blur region. When the in-flow tabs scroll
-            past, a second copy of the TabStrip slides in inside this same
+        {/* Fixed top bar — single blur region across the full viewport at
+            every breakpoint, so the top bar reads the same on Recipe as on
+            Form / Results. When the in-flow tabs scroll past on phone /
+            tablet, a second copy of the TabStrip slides in inside this same
             wrapper, so the blur stays one continuous surface (no seam). The
             bar grows when that happens; main's paddingTop tracks topBarH so
-            the body always starts just below the bar. Hidden at lg+: back /
-            share / kebab render inside the left panel, tabs are sticky in
-            the right panel. No top bar on desktop. */}
-        <TopBar ref={topBarRef} position="fixed" className="z-30 lg:hidden">
-          <div className="mx-auto flex max-w-md items-center gap-1 px-3 py-2 md:max-w-2xl md:px-8 lg:px-10">
-            <button
-              type="button"
-              aria-label="Back to results"
-              onClick={back}
-              className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
-            >
-              <ArrowLeft size={20} />
-            </button>
-
-            {/* Title fades in once the in-page title scrolls out. Tracks
-                the currently-displayed recipe, including alt-swaps. */}
-            <h2
-              aria-hidden={!titleInBar}
-              className={`truncate font-sans text-strong font-semibold text-ink transition-opacity duration-150 ${
-                titleInBar ? "opacity-100" : "opacity-0"
-              }`}
-            >
-              {recipe.title}
-            </h2>
-
-            <div className="ml-auto flex items-center">
+            the body always starts just below the bar. At lg+ the in-bar
+            tabs copy stays hidden — the right column has its own sticky
+            tab strip just below the bar. */}
+        <TopBar ref={topBarRef} position="fixed" className="z-30">
+          {/* Inner container — flex single-row at <lg, two-column grid at lg+
+              that mirrors the page body's 1fr_3fr split. Left grid item holds
+              the action row (back + share + kebab); right grid item holds the
+              tab strip. Single frosted surface across the whole top — no
+              second blur to compete with the bar's. Symmetric py-2 keeps the
+              bar's total height matching Form / Results (64px) — at lg+ the
+              tab strip shrinks to the same 40px height as the action row
+              instead of staying 56px, so both halves of the bar share one
+              row height and the bar doesn't need extra chrome. */}
+          <div className="mx-auto flex max-w-md items-center px-3 py-2 md:max-w-2xl md:px-8 lg:max-w-[1280px] lg:grid lg:grid-cols-[1fr_3fr] lg:gap-x-6 lg:px-8 xl:px-10">
+            {/* Slot 1: action row. flex-1 lets it span the full bar width at
+                <lg (where it's the only visible child of the outer flex);
+                at lg+ it's a grid item sized by the 1fr column and we use
+                justify-between to push back and share/kebab to the column's
+                outer edges (mirrors the pre-unified-bar aside layout).
+                lg:self-start anchors the row to the top of the grid row so
+                the back button lands at the same Y as Results' back button —
+                the row's intrinsic height grows to fit slot 2's 56px tab
+                strip, but slot 1's 40px content shouldn't drift downward to
+                centre inside that taller row. */}
+            <div className="flex flex-1 items-center gap-1 lg:justify-between lg:self-start">
               <button
                 type="button"
-                aria-label="Share"
-                onClick={() => showToast("Share — wired post-v1.")}
-                className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink-muted"
-              >
-                <Share2 size={18} />
-              </button>
-              <button
-                type="button"
-                aria-label="More actions"
-                onClick={() => setKebabOpen(true)}
+                aria-label="Back to results"
+                onClick={back}
                 className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
               >
-                <MoreVertical size={20} />
+                <ArrowLeft size={20} />
               </button>
+
+              {/* Title fades in on phone/tablet once the in-page title scrolls
+                  out. Hidden at lg+ — the aside has the always-visible big
+                  title there, so a second copy in the bar would just compete. */}
+              <h2
+                aria-hidden={!titleInBar}
+                className={`truncate font-sans text-strong font-semibold text-ink transition-opacity duration-150 lg:hidden ${
+                  titleInBar ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                {recipe.title}
+              </h2>
+
+              <div className="ml-auto flex items-center lg:ml-0">
+                <button
+                  type="button"
+                  aria-label="Share"
+                  onClick={() => showToast("Share — wired post-v1.")}
+                  className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink-muted"
+                >
+                  <Share2 size={18} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="More actions"
+                  onClick={() => setKebabOpen(true)}
+                  className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
+                >
+                  <MoreVertical size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Slot 2: tab strip — only at lg+. Always visible (no fade-in
+                pattern needed since it lives in the bar from the start),
+                so tabIndex is permanently 0. Column-direction flex lets the
+                tablist stretch to the full 3fr column width — a row-direction
+                flex would size the tablist to its content instead and crush
+                the buttons against each other. The `[&_button]:py-2` arbitrary
+                variant shrinks each tab button's vertical padding from py-4
+                (56px tall) to py-2 (40px tall) ONLY in this slot, matching
+                the action row's 40px button height so the bar reads as one
+                uniform row at lg+. Mobile / tablet tab strips below stay at
+                py-4 — taller-feeling tabs make sense as in-flow content
+                markers on phone, just not as bar chrome on desktop. */}
+            <div className="hidden lg:flex lg:flex-col lg:[&_button]:py-2">
+              <TabStrip
+                active={activeTab}
+                onChange={handleTabChange}
+                tabIndex={0}
+              />
             </div>
           </div>
 
@@ -615,46 +659,16 @@ export default function Recipe() {
           {/* LEFT panel — sticky on lg+ so identity / stats / CTA stay
               anchored while the right column scrolls. self-start keeps the
               aside the height of its content (CSS grid otherwise stretches
-              children to row height, which breaks sticky). pt-6 is internal
-              to the sticky element so the action row keeps its breathing
-              room whether at rest or pinned. */}
-          <aside className="lg:sticky lg:top-0 lg:self-start lg:pt-6">
-            {/* Action row — desktop only. Replaces the TopBar's controls
-                (back / share / kebab). Same handlers as the mobile bar.
-                lg:py-2 makes the row 56px tall (40px button + 16px padding)
-                — same intrinsic height as a tab button (py-4 + text-strong
-                ~= 56px). With flex items-center, the icons end up vertically
-                centered to the tab labels in the right column. Without this
-                the 40px-tall row sat 8px higher than the 56px-tall tabs. */}
-            <div className="hidden items-center justify-between lg:mb-4 lg:flex lg:py-2">
-              <button
-                type="button"
-                aria-label="Back to results"
-                onClick={back}
-                className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
-              >
-                <ArrowLeft size={20} />
-              </button>
-              <div className="flex items-center">
-                <button
-                  type="button"
-                  aria-label="Share"
-                  onClick={() => showToast("Share — wired post-v1.")}
-                  className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink-muted"
-                >
-                  <Share2 size={18} />
-                </button>
-                <button
-                  type="button"
-                  aria-label="More actions"
-                  onClick={() => setKebabOpen(true)}
-                  className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
-                >
-                  <MoreVertical size={20} />
-                </button>
-              </div>
-            </div>
-
+              children to row height, which breaks sticky). Sticks below the
+              unified top bar via inline `top: topBarH` — bar's height is
+              dynamic when tabs slide in on mobile, so we track the measured
+              value rather than baking a constant. pt-6 is internal to the
+              sticky element so the identity title has breathing room from
+              the bar's bottom edge whether at rest or pinned. */}
+          <aside
+            className="lg:sticky lg:self-start lg:pt-6"
+            style={{ top: topBarH }}
+          >
             {/* Identity block — plain white. Holds title, source, pills, pairs. */}
             <section>
               <div className="mx-auto max-w-md px-5 pt-4 pb-6 md:max-w-2xl md:px-8 lg:max-w-none lg:px-0 lg:pt-0 lg:pb-0">
@@ -770,17 +784,16 @@ export default function Recipe() {
           {/* RIGHT panel — tabs + tab content. No card / border — same as
               the left panel, floating content with the grid gap separating. */}
           <div>
-            {/* In-flow tabs — anchored to the content they control. A sentinel
-                placed at the *bottom* edge tells us when the strip has fully
-                scrolled under the top bar; only then does the in-bar copy fade
-                in (phone/tablet only — at lg+ the strip becomes sticky inside
-                the right column so the in-bar copy is unnecessary).
-                lg: pins at top-0 so the frosted bg reaches the viewport edge
-                — pt-6 lives inside so the tab buttons keep their offset while
-                the frost covers the area content would otherwise scroll through. */}
+            {/* In-flow tabs — anchored to the content they control on phone /
+                tablet. A sentinel placed at the *bottom* edge tells us when
+                the strip has fully scrolled under the top bar; only then
+                does the in-bar copy fade in. Hidden entirely at lg+: the
+                tab strip there lives inside the top bar's right column slot
+                from the start, so a second copy in the right body column
+                would be a duplicate. */}
             <div
               ref={inFlowTabsRef}
-              className="recipe-body-fade bg-paper lg:sticky lg:top-0 lg:z-10 lg:bg-paper/70 lg:pt-6 lg:backdrop-blur-lg"
+              className="recipe-body-fade bg-paper lg:hidden"
             >
               <div className="mx-auto max-w-md md:max-w-2xl lg:max-w-none">
                 <TabStrip

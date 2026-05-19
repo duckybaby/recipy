@@ -11,6 +11,7 @@
 //   • "Surprise me" → resets filters to { surprise: true } first so the
 //     resulting search doesn't carry stale chip selections. Same intent.
 
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChipGroup } from "../components/ChipGroup";
 import { HamburgerButton } from "../components/HamburgerButton";
@@ -73,50 +74,105 @@ export default function Form() {
   const cookSelected: string[] =
     filters.cookMax === null ? [] : [String(filters.cookMax)];
 
+  // ---- Top bar measurement + in-page CTA tracking ----
+  //
+  // The "Find recipes" CTA lives next to the title on md+. As the user
+  // scrolls past it, a copy in the top bar fades in (same pattern as
+  // Recipe's title-in-bar fade). We measure the bar via ResizeObserver
+  // and use its height as the rootMargin top for the IntersectionObserver
+  // — so "intersecting" means "still visible below the bar." At <md the
+  // in-page button is display:none, and the in-bar copy is hidden too,
+  // so the observer's state doesn't matter visually on phone.
+  const topBarRef = useRef<HTMLDivElement>(null);
+  const [topBarH, setTopBarH] = useState(0);
+  const inPageCtaRef = useRef<HTMLButtonElement>(null);
+  const [ctaInBar, setCtaInBar] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = topBarRef.current;
+    if (!el) return;
+    const measure = () => setTopBarH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!inPageCtaRef.current || topBarH === 0) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        // !isIntersecting once the in-page CTA scrolls fully behind the
+        // bar — rootMargin shifts the IO root's top down by the bar's
+        // height so the bar's blur region counts as "outside" the root.
+        setCtaInBar(!entry.isIntersecting);
+      },
+      { rootMargin: `-${topBarH}px 0px 0px 0px`, threshold: 0 },
+    );
+    obs.observe(inPageCtaRef.current);
+    return () => obs.disconnect();
+  }, [topBarH]);
+
   return (
     <>
-      {/* Fixed top bar — chrome only. Hamburger left, theme toggle right;
-          on md+ the primary "Find recipes" CTA sits between them. Title
-          and description live in the body now (scroll away normally), so
-          this bar is just navigation + global controls. items-center so
-          every element shares the same vertical axis without margin
-          tweaks. py-2 around the 40px buttons gives a 56px-tall bar.
-          `fixed` (not sticky) so iOS rubber-band overscroll doesn't
-          bounce it — matches the bottom CTA's locked-to-viewport feel.
-          Main below compensates with explicit padding-top since the
-          bar is now out of document flow. */}
-      <TopBar position="fixed">
+      {/* Fixed top bar — chrome + a scroll-tracked "Find recipes" copy.
+          The CTA's primary home at md+ is the inline button next to the
+          title in the body. Once that in-page button scrolls behind the
+          bar, this in-bar copy fades in via the ctaInBar IO above. py-2
+          around the 40px buttons gives a 64px-tall bar (matches Results
+          / Recipe). `fixed` (not sticky) so iOS rubber-band overscroll
+          doesn't bounce it. Main below compensates with explicit
+          padding-top since the bar is out of document flow. */}
+      <TopBar ref={topBarRef} position="fixed">
         <header className="mx-auto flex max-w-md items-center px-3 py-2 md:max-w-[1280px] md:px-8 lg:px-10">
           <HamburgerButton />
-          {/* Right cluster: Find recipes CTA on md+. Theme toggle moved
-              to the drawer (M3 phase 3) — global preference, not a
-              per-screen control. */}
+          {/* In-bar Find recipes — fades in once the in-page CTA scrolls
+              past. Hidden at <md (mobile uses the sticky bottom CTA
+              instead). pointer-events-none + aria-hidden + tabIndex=-1
+              while invisible so it's inert to clicks, screen readers,
+              and keyboard tabbing — otherwise an offscreen tab stop
+              would be confusing. */}
           <button
             type="button"
             onClick={findRecipes}
-            className="btn-primary btn-primary-compact focus-ring ml-auto hidden md:inline-flex"
+            aria-hidden={!ctaInBar}
+            tabIndex={ctaInBar ? 0 : -1}
+            className={`btn-primary btn-primary-compact focus-ring ml-auto hidden transition-opacity duration-200 md:inline-flex ${
+              ctaInBar ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
           >
             Find recipes
           </button>
         </header>
       </TopBar>
 
-      {/* paddingTop = max(safe-area, 8px) [bar's own top pad]
-                       + 56px              [header py-2 + 40px button]
-                       + 32px              [desired gap to title — was pt-8]
-          So title baseline matches what the previous sticky layout
-          gave us, while the bar above is rock-solid against overscroll. */}
+      {/* paddingTop = measured bar height + 32px desired gap to the title
+          row. Using the measured value keeps the gap stable even if the
+          bar's chrome changes (safe-area, font scaling, etc.). */}
       <main
         className="mx-auto max-w-md px-5 pb-32 md:max-w-[1280px] md:px-8 md:pb-16 lg:px-10"
-        style={{
-          paddingTop: "calc(max(env(safe-area-inset-top), 8px) + 88px)",
-        }}
+        style={{ paddingTop: topBarH + 32 }}
       >
         {/* Intro group — title + desc are tightly grouped (mt-2 between
             them), then a bigger break (mt-10) before the form starts.
-            Spacings are deliberate per context, not universal. */}
+            Spacings are deliberate per context, not universal.
+            At md+ the "Find recipes" CTA sits on the same row as the
+            title (md:flex wrapper). The button carries inPageCtaRef
+            so its visibility drives the in-bar fade-in above. On phone
+            the wrapper falls back to block flow and the button hides
+            (the sticky bottom CTA further down handles mobile). */}
         <div>
-          <h1 className="text-title">What are we cooking today?</h1>
+          <div className="md:flex md:items-center">
+            <h1 className="text-title">What are we cooking today?</h1>
+            <button
+              ref={inPageCtaRef}
+              type="button"
+              onClick={findRecipes}
+              className="btn-primary btn-primary-compact focus-ring hidden shrink-0 md:ml-auto md:inline-flex"
+            >
+              Find recipes
+            </button>
+          </div>
           <p className="mt-2 text-body text-ink-muted">
             Tap a few things to find recipes,
             {/* Forced break on mobile keeps the copy tight and stops
