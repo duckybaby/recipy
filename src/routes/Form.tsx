@@ -131,20 +131,37 @@ export default function Form() {
           {/* In-bar Find recipes — fades in once the in-page CTA scrolls
               past. Hidden at <md (mobile uses the sticky bottom CTA
               instead). pointer-events-none + aria-hidden + tabIndex=-1
-              while invisible so it's inert to clicks, screen readers,
-              and keyboard tabbing — otherwise an offscreen tab stop
-              would be confusing. */}
-          <button
-            type="button"
-            onClick={findRecipes}
+              while invisible so the cluster is inert to clicks, screen
+              readers, and keyboard tabbing — otherwise an offscreen
+              tab stop would be confusing. The "Only with video"
+              checkbox fades in alongside the button so the user can
+              flip it without scrolling back up to the title row. */}
+          <div
             aria-hidden={!ctaInBar}
-            tabIndex={ctaInBar ? 0 : -1}
-            className={`btn-primary btn-primary-compact focus-ring ml-auto hidden transition-opacity duration-200 md:inline-flex ${
+            className={`ml-auto hidden items-center gap-5 transition-opacity duration-200 md:flex ${
               ctaInBar ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
           >
-            Find recipes
-          </button>
+            <label className="inline-flex cursor-pointer items-center gap-3 text-caption text-ink-muted">
+              <input
+                type="checkbox"
+                checked={filters.hasVideo ?? false}
+                onChange={(e) => update({ hasVideo: e.target.checked })}
+                tabIndex={ctaInBar ? 0 : -1}
+                style={{ accentColor: "var(--color-accent)" }}
+                className="h-5 w-5 cursor-pointer"
+              />
+              <span>Only with video</span>
+            </label>
+            <button
+              type="button"
+              onClick={findRecipes}
+              tabIndex={ctaInBar ? 0 : -1}
+              className="btn-primary btn-primary-compact focus-ring inline-flex"
+            >
+              Find recipes
+            </button>
+          </div>
         </header>
       </TopBar>
 
@@ -166,14 +183,32 @@ export default function Form() {
         <div>
           <div className="md:flex md:items-center">
             <h1 className="text-title">What are we cooking today?</h1>
-            <button
-              ref={inPageCtaRef}
-              type="button"
-              onClick={findRecipes}
-              className="btn-primary btn-primary-compact focus-ring hidden shrink-0 md:ml-auto md:inline-flex"
-            >
-              Find recipes
-            </button>
+            {/* md+ cluster: "Only with video" checkbox + Find recipes
+                button, right-aligned. Hidden at <md; mobile gets the
+                same controls inside the sticky bottom CTA. The button
+                carries inPageCtaRef so its visibility drives the
+                bar fade-in above (the bar version of this same
+                cluster fades in alongside it). */}
+            <div className="hidden shrink-0 md:ml-auto md:flex md:items-center md:gap-5">
+              <label className="inline-flex cursor-pointer items-center gap-3 text-caption text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={filters.hasVideo ?? false}
+                  onChange={(e) => update({ hasVideo: e.target.checked })}
+                  style={{ accentColor: "var(--color-accent)" }}
+                  className="h-5 w-5 cursor-pointer"
+                />
+                <span>Only with video</span>
+              </label>
+              <button
+                ref={inPageCtaRef}
+                type="button"
+                onClick={findRecipes}
+                className="btn-primary btn-primary-compact focus-ring inline-flex"
+              >
+                Find recipes
+              </button>
+            </div>
           </div>
           <p className="mt-2 text-body text-ink-muted">
             Tap a few things to find recipes,
@@ -290,45 +325,16 @@ export default function Form() {
             onChange={(next) => update({ dishTypes: next as DishType[] })}
           />
         </div>
-
-        {/* Has-video toggle (M4) — yes/no preference, not a chip group.
-            Sits below the chips so the form's primary mental model
-            (chips = filter facets) stays clean. The toggle adds a soft
-            prompt hint preferring recipes with embedded videos; it
-            doesn't strictly exclude videoless results. Custom styling
-            (label + switch row) rather than a single checkbox so it
-            visually reads as a setting, not a filter facet. */}
-        <div className="mt-10 flex items-center justify-between rounded-card border border-line bg-paper-soft px-4 py-3">
-          <div className="min-w-0 flex-1 pr-4">
-            <p className="text-strong font-medium text-ink">Only recipes with a video</p>
-            <p className="mt-1 text-caption text-ink-muted">
-              Prefers recipes from pages with an embedded YouTube or Vimeo.
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={filters.hasVideo ?? false}
-            onClick={() => update({ hasVideo: !(filters.hasVideo ?? false) })}
-            className={`focus-ring relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
-              filters.hasVideo ? "bg-accent" : "bg-line"
-            }`}
-          >
-            <span
-              aria-hidden
-              className={`inline-block h-5 w-5 transform rounded-full bg-paper shadow-soft transition-transform ${
-                filters.hasVideo ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
-        </div>
       </main>
 
       {/* Sticky bottom CTA — phone only (md:hidden). Anchored above iOS home
           indicator. Translucent + blurred to match the top header, with a
           generous bottom buffer so the orange CTA shadow has room to render
           without getting clipped by Safari's URL chrome. On md+ the CTA
-          lives in the header right-cluster instead. */}
+          lives in the header right-cluster instead. The "Only with video"
+          checkbox sits as its own row above the Find recipes button; the
+          frosted bg of the panel covers both so they read as one
+          chrome region. */}
       <div
         className="pointer-events-none fixed inset-x-0 z-20 md:hidden"
         style={{ bottom: 0 }}
@@ -339,7 +345,17 @@ export default function Form() {
           className="pointer-events-auto bg-paper/60 backdrop-blur-lg"
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
         >
-          <div className="mx-auto max-w-md px-5 pt-2 pb-2">
+          <div className="mx-auto max-w-md px-5 pt-3 pb-2">
+            <label className="mb-4 flex cursor-pointer items-center justify-center gap-3 text-strong text-ink">
+              <input
+                type="checkbox"
+                checked={filters.hasVideo ?? false}
+                onChange={(e) => update({ hasVideo: e.target.checked })}
+                style={{ accentColor: "var(--color-accent)" }}
+                className="h-6 w-6 cursor-pointer"
+              />
+              <span>Only recipes with a video</span>
+            </label>
             <button
               type="button"
               onClick={findRecipes}
