@@ -4,8 +4,8 @@
   "description": "One-off local scripts (backfill, migrations). Kept separate from functions/ so the function bundle stays lean.",
   "private": true,
   "scripts": {
-    "backfill-library": "ts-node backfill-library.ts",
-    "backfill-library:dry": "ts-node backfill-library.ts --dry-run"
+    "backfill-library": "ts-node --transpile-only backfill-library.ts",
+    "backfill-library:dry": "ts-node --transpile-only backfill-library.ts --dry-run"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0"

@@ -54,7 +54,9 @@ async function main() {
       .limit(PAGE_SIZE);
     if (lastDoc) query = query.startAfter(lastDoc);
 
+    console.log("  > issuing query.get() ...");
     const snap = await query.get();
+    console.log(`  > query.get() returned ${snap.size} docs`);
     if (snap.empty) break;
 
     for (const doc of snap.docs) {

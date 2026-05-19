@@ -13,6 +13,7 @@
 // Errors are caught and logged but never thrown — a library write
 // failure must never break the user-facing response.
 
+import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { createHash } from "node:crypto";
 import type { Recipe, SearchFilters } from "./validation";
@@ -23,7 +24,21 @@ const SCHEMA_VERSION = 1;
 
 let dbHandle: FirebaseFirestore.Firestore | null = null;
 function db(): FirebaseFirestore.Firestore {
-  if (!dbHandle) dbHandle = getFirestore(DATABASE_ID);
+  if (!dbHandle) {
+    // Auto-initialise the default Firebase admin app if no caller has done so.
+    // In the Cloud Functions runtime, index.ts initialises first and this is
+    // a no-op. In the backfill script context, library.ts and the script
+    // resolve firebase-admin from different node_modules trees (scripts/
+    // vs functions/), so each module copy has its own AppStore singleton —
+    // the script's initializeApp doesn't reach this module's AppStore.
+    // Initialising lazily here (rather than at module load) avoids racing
+    // the script's own setup and picks up GOOGLE_APPLICATION_CREDENTIALS
+    // the same way applicationDefault() does.
+    if (getApps().length === 0) {
+      initializeApp();
+    }
+    dbHandle = getFirestore(DATABASE_ID);
+  }
   return dbHandle;
 }
 
@@ -116,7 +131,14 @@ export async function upsertLibraryBatch(
   let failed = 0;
   for (const r of results) {
     if (r.status === "fulfilled") ok++;
-    else failed++;
+    else {
+      failed++;
+      // Surface synchronous-throw rejections that upsertLibraryRecipe's
+      // try-catch couldn't see (e.g. recipe.source.url undefined throwing
+      // before the transaction even starts). Log the actual reason so we
+      // don't end up with a silent "all failed" count.
+      console.warn("upsertLibraryBatch rejection:", r.reason);
+    }
   }
   return { ok, failed };
 }
