@@ -7,7 +7,9 @@ import {
 } from "react-router-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { UserContextProvider } from "./hooks/useUserContext";
+import { DrawerProvider } from "./hooks/useDrawer";
 import { AuthGate } from "./components/AuthGate";
+import { Drawer } from "./components/Drawer";
 import { ResumeBanner } from "./components/ResumeBanner";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { PageTransition } from "./components/PageTransition";
@@ -15,21 +17,30 @@ import Form from "./routes/Form";
 import Results from "./routes/Results";
 import Recipe from "./routes/Recipe";
 import Cooking from "./routes/Cooking";
+import Saved from "./routes/Saved";
+import Preferences from "./routes/Preferences";
 
 export default function App() {
   return (
     <UserContextProvider>
       <AuthGate>
-        {/* Reset scroll to top on every forward navigation — gives the app
-            a native mobile feel where tapping into a screen always starts
-            you at the top. Back/forward still restore. */}
-        <ScrollToTop />
+        <DrawerProvider>
+          {/* Reset scroll to top on every forward navigation — gives the app
+              a native mobile feel where tapping into a screen always starts
+              you at the top. Back/forward still restore. */}
+          <ScrollToTop />
 
-        {/* Global resume banner — appears on every screen if a cook is in
-            progress (spec §2). Cooking mode itself hides it. */}
-        <ResumeBanner />
+          {/* Global resume banner — appears on every screen if a cook is in
+              progress (spec §2). Cooking mode itself hides it. */}
+          <ResumeBanner />
 
-        <AnimatedRoutes />
+          <AnimatedRoutes />
+
+          {/* Single drawer mount point — Form/Results/Recipe each render a
+              HamburgerButton that opens this. Cooking intentionally omits
+              the button so cook mode stays distraction-free. */}
+          <Drawer />
+        </DrawerProvider>
       </AuthGate>
     </UserContextProvider>
   );
@@ -103,6 +114,10 @@ function AnimatedRoutes() {
               </PageTransition>
             }
           />
+          {/* M3 phase 3 stubs — phase 4 (Preferences) + phase 5 (Saved)
+              fill in the real content. Wired now so the drawer links work. */}
+          <Route path="/saved" element={<Saved />} />
+          <Route path="/preferences" element={<Preferences />} />
         </Routes>
       </motion.div>
     </AnimatePresence>

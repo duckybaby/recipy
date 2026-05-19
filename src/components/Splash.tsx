@@ -50,7 +50,7 @@ export function Splash() {
     <main className="safe-pt safe-pb flex min-h-[100dvh] flex-col items-center justify-center bg-paper px-5">
       <div className="mx-auto flex w-full max-w-md flex-col items-center text-center">
         <h1 className="font-serif text-title text-ink">recipy</h1>
-        <p className="mt-2 text-body text-ink-muted">What are we cooking?</p>
+        <p className="mt-2 text-body text-ink-muted">What are we cooking today?</p>
 
         <p className="mt-10 text-body text-ink">
           Find a real recipe, scale it for your household, walk through it step by step.

@@ -31,6 +31,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, RotateCw } from "lucide-react";
 import { RecipeCard, RecipeCardSkeleton } from "../components/RecipeCard";
 import { Loader } from "../components/Loader";
+import { TopBar } from "../components/TopBar";
+import { EditChoicesSheet } from "../components/EditChoicesSheet";
 import { summarizeFilters, toApiBody } from "../lib/filters";
 import { api, ApiError } from "../lib/api";
 import {
@@ -38,13 +40,18 @@ import {
   getFreshLastSearch,
   useStore,
 } from "../lib/store";
-import type { Recipe } from "../lib/types";
+import type { Recipe, SearchFilters } from "../lib/types";
 
 const TARGET_RECIPE_COUNT = 3;
 const MIN_LOADER_MS = 600;
 const TOAST_MS = 2500;
 
-type Intent = "fresh" | "regenerate";
+// "update" is what the Edit-choices sheet emits — full-bleed loader
+// like "fresh" (the user committed to new filters, page should reset),
+// but skipCache like "regenerate" (deliberate user action, give them
+// the loader feedback). Post-success toast reads "Recipes have been
+// updated!" instead of "New recipes found!".
+type Intent = "fresh" | "regenerate" | "update";
 
 type Phase =
   | { kind: "initial" } // fresh load — loader full-bleed, no top bar yet
@@ -116,6 +123,11 @@ export default function Results() {
     variant: "success" | "info";
   } | null>(null);
 
+  // Edit-choices sheet open state. The sheet manages its own local
+  // filter copy; we only flip this boolean and receive new filters
+  // back via onUpdate.
+  const [editOpen, setEditOpen] = useState(false);
+
   // Strict Mode runs the mount effect twice in dev — this ref keeps the
   // intent consumption (and the fetch) idempotent.
   const consumedRef = useRef(false);
@@ -128,8 +140,10 @@ export default function Results() {
     inFlightCtrl = ctrl;
     const startedAt = Date.now();
 
+    // Full-bleed loader for fresh + update (both reset the page);
+    // overlay loader for regenerate (keeps old cards behind a cover).
     setPhase(
-      mode === "fresh" ? { kind: "initial" } : { kind: "regenerating" },
+      mode === "regenerate" ? { kind: "regenerating" } : { kind: "initial" },
     );
     setStreamed(0);
 
@@ -159,9 +173,10 @@ export default function Results() {
             if (!ctrl.signal.aborted) setStreamed((n) => n + 1);
           },
           ctrl.signal,
-          // Regenerate bypasses the backend cache so the user actually
-          // gets different recipes, not the same batch we cached last time.
-          { skipCache: mode === "regenerate" },
+          // Regenerate AND Update bypass the backend cache so the user
+          // actually sees a fresh response, not the same batch we cached
+          // last time. Fresh keeps the cache for fast back-nav.
+          { skipCache: mode === "regenerate" || mode === "update" },
         );
         if (ctrl.signal.aborted) return;
         recipes = fetched;
@@ -191,6 +206,12 @@ export default function Results() {
         const variant: "success" | "info" =
           recipes.length > 0 ? "success" : "info";
         setToast({ message, variant });
+        window.setTimeout(() => setToast(null), TOAST_MS);
+      } else if (mode === "update" && recipes.length > 0) {
+        // Edit-sheet update success. Suppress the toast on zero results
+        // — "updated!" alongside "no recipes found" is contradictory;
+        // EmptyState carries the message in that case.
+        setToast({ message: "Recipes have been updated!", variant: "success" });
         window.setTimeout(() => setToast(null), TOAST_MS);
       }
     } catch (err) {
@@ -237,6 +258,17 @@ export default function Results() {
   };
   const retry = () => void runSearch("regenerate");
 
+  // Edit-choices commit: write the new filters to the store so Form
+  // and any future read see them as the new source of truth, close
+  // the sheet, then fire an "update" search. runSearch reads filters
+  // via useStore.getState(), so the order matters: store first, then
+  // search.
+  const applyEdit = (next: SearchFilters) => {
+    useStore.getState().setFilters(next);
+    setEditOpen(false);
+    void runSearch("update");
+  };
+
   const recipes = lastSearch?.recipes ?? [];
   const showFullBleedLoader = phase.kind === "initial";
   const showOverlayLoader = phase.kind === "regenerating";
@@ -245,15 +277,15 @@ export default function Results() {
   if (phase.kind === "error") {
     return (
       <>
-        <TopBar
-          onBack={back}
-          onRetry={retry}
-          loading={false}
-          filtersSummary={summarizeFilters(filters)}
-        />
+        <ResultsHeader onBack={back} onRetry={retry} loading={false} />
+        {/* paddingTop matches Form's fixed-bar calc — bar 56px + safe-area
+            + 32px desired gap to content. */}
         <main
-          className="mx-auto max-w-md px-5 pt-2 md:max-w-[1280px] md:px-8 lg:px-10"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
+          className="mx-auto max-w-md px-5 md:max-w-[1280px] md:px-8 lg:px-10"
+          style={{
+            paddingTop: "calc(max(env(safe-area-inset-top), 8px) + 88px)",
+            paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
+          }}
         >
           <ErrorState message={phase.message} onRetry={retry} onBack={back} />
         </main>
@@ -282,13 +314,10 @@ export default function Results() {
           topBarVisible ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <TopBar
+        <ResultsHeader
           onBack={back}
           onRetry={retry}
           loading={phase.kind === "regenerating"}
-          filtersSummary={summarizeFilters(
-            lastSearch?.filters ?? filters,
-          )}
         />
       </div>
 
@@ -298,16 +327,43 @@ export default function Results() {
         visible={toast !== null}
       />
 
+      {/* paddingTop matches Form's fixed-bar calc — bar 56px + safe-area
+          + 32px desired gap. Content below scrolls normally. */}
       <main
-        className="mx-auto max-w-md px-5 pt-2 md:max-w-[1280px] md:px-8 md:pt-6 lg:px-10"
-        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
+        className="mx-auto max-w-md px-5 md:max-w-[1280px] md:px-8 lg:px-10"
+        style={{
+          paddingTop: "calc(max(env(safe-area-inset-top), 8px) + 88px)",
+          paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
+        }}
       >
+        {/* Subtitle: "Showing N recipes for / <filters>" + Edit link.
+            Display-only now — only the Edit link is interactive. The
+            top-bar back arrow handles return-to-Form. Hidden when count
+            is 0 so we don't flash "Showing 0 recipes" during streaming
+            or empty. */}
+        <FilterSubtitle
+          count={recipes.length}
+          filtersSummary={summarizeFilters(lastSearch?.filters ?? filters)}
+          onEdit={() => setEditOpen(true)}
+        />
+
         {recipes.length === 0 && phase.kind === "ready" ? (
           <EmptyState onBack={back} />
         ) : (
           <CardList recipes={recipes} batchKey={batchKey} />
         )}
       </main>
+
+      {/* Edit-choices sheet — bottom sheet with all chip groups + a
+          pinned Update CTA. Mount unconditionally so the open/close
+          animation runs both ways via AnimatePresence inside the
+          component itself. */}
+      <EditChoicesSheet
+        open={editOpen}
+        initialFilters={lastSearch?.filters ?? filters}
+        onClose={() => setEditOpen(false)}
+        onUpdate={applyEdit}
+      />
 
       {/* Regenerate overlay — opaque cover over the existing cards so the
           old set doesn't flicker mid-swap. Sits below the top bar so the
@@ -328,55 +384,89 @@ export default function Results() {
 
 // ============================================================ subcomponents
 
-function TopBar({
+// Renamed from `TopBar` to avoid the collision with the shared
+// components/TopBar.tsx. This is the Results-specific header — fixed
+// chrome only (back + title + regenerate + theme toggle). The two-line
+// "Showing N recipes for / <filters>" subtitle lives in the body as
+// <FilterSubtitle>, NOT in this bar — scrolling lets the subtitle
+// move out of view while the bar stays anchored.
+function ResultsHeader({
   onBack,
   onRetry,
   loading,
-  filtersSummary,
 }: {
   onBack: () => void;
   onRetry: () => void;
   loading: boolean;
-  filtersSummary: string;
 }) {
   return (
-    <div
-      className="sticky top-0 z-20 bg-paper/60 backdrop-blur-lg"
-      style={{ paddingTop: "max(env(safe-area-inset-top), 8px)" }}
-    >
-      {/* Shared max-width wrapper so the action row and the filter-summary
-          click area both align with the cards below at every breakpoint. */}
-      <div className="mx-auto max-w-md md:max-w-[1280px]">
-        <div className="flex items-center gap-1 px-3 md:px-8 lg:px-10">
-          <button
-            type="button"
-            aria-label="Back to filters"
-            onClick={onBack}
-            className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <h1 className="text-strong font-semibold text-ink">Recipes</h1>
+    <TopBar position="fixed">
+      <div className="mx-auto flex max-w-md items-center px-3 py-2 md:max-w-[1280px] md:px-8 lg:px-10">
+        <button
+          type="button"
+          aria-label="Back to filters"
+          onClick={onBack}
+          className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="ml-1 font-sans text-strong font-semibold text-ink">Recipes</h1>
+        <div className="ml-auto flex items-center gap-2">
+          {/* Theme toggle moved to the drawer (M3 phase 3) — global
+              preference, not per-screen. Regenerate stays as the only
+              right-side action on Results. */}
           <button
             type="button"
             aria-label="Regenerate results"
             onClick={onRetry}
             disabled={loading}
-            className="focus-ring ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink disabled:opacity-40"
+            className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center text-ink disabled:opacity-40"
           >
             <RotateCw size={18} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="focus-ring block w-full px-5 pt-1 pb-2 text-left md:px-8 lg:px-10"
-        >
-          <span className="block truncate text-caption text-ink-muted">
-            {filtersSummary}
-          </span>
-        </button>
       </div>
+    </TopBar>
+  );
+}
+
+/**
+ * Two-line subtitle below the top bar — "Showing N recipes for /
+ * <filter list>" — plus an Edit link below that opens the
+ * EditChoicesSheet. The subtitle text itself is display-only now
+ * (was a back-nav button before phase 3). Top-bar back arrow is
+ * the only way back to Form; Edit is the only way to modify
+ * filters in place. Two affordances, two distinct outcomes.
+ *
+ * Hidden when `count === 0` so we don't flash "Showing 0 recipes
+ * for" during the gap between top bar mount and the first card
+ * arriving from the stream.
+ */
+function FilterSubtitle({
+  count,
+  filtersSummary,
+  onEdit,
+}: {
+  count: number;
+  filtersSummary: string;
+  onEdit: () => void;
+}) {
+  if (count === 0) return null;
+  const recipeWord = count === 1 ? "recipe" : "recipes";
+  return (
+    <div>
+      <p className="text-caption text-ink-muted">
+        Showing {count} {recipeWord} for
+      </p>
+      <p className="mt-1 truncate text-body text-ink">{filtersSummary}</p>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="focus-ring mt-2 inline-block rounded text-caption font-medium underline underline-offset-4"
+        style={{ color: "var(--color-accent-strong)" }}
+      >
+        Edit
+      </button>
     </div>
   );
 }
@@ -395,7 +485,7 @@ function CardList({
   return (
     <div
       key={batchKey}
-      className="mt-4 flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-3"
+      className="mt-8 flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-3"
     >
       {recipes.map((r, i) => (
         <div

@@ -13,7 +13,17 @@
 
 import { useNavigate } from "react-router-dom";
 import { ChipGroup } from "../components/ChipGroup";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { HamburgerButton } from "../components/HamburgerButton";
+import { TopBar } from "../components/TopBar";
+import {
+  MEAL_OPTIONS,
+  CUISINE_OPTIONS,
+  DIET_OPTIONS,
+  PREP_OPTIONS,
+  COOK_OPTIONS,
+  VIBE_OPTIONS,
+  MAIN_OPTIONS,
+} from "../lib/filterOptions";
 import { EMPTY_FILTERS, useStore } from "../lib/store";
 import type {
   SearchFilters,
@@ -25,69 +35,6 @@ import type {
   PrepMax,
   CookMax,
 } from "../lib/types";
-
-const MEAL_OPTIONS: { value: Meal; label: string }[] = [
-  { value: "breakfast", label: "Breakfast" },
-  { value: "lunch", label: "Lunch" },
-  { value: "dinner", label: "Dinner" },
-  { value: "snack", label: "Snack" },
-  { value: "dessert", label: "Dessert" },
-];
-
-const CUISINE_OPTIONS: { value: Cuisine; label: string }[] = [
-  { value: "south-indian", label: "South Indian" },
-  { value: "north-indian", label: "North Indian" },
-  { value: "chinese", label: "Chinese" },
-  { value: "italian", label: "Italian" },
-  { value: "continental", label: "Continental" },
-  { value: "thai", label: "Thai" },
-  { value: "mexican", label: "Mexican" },
-  { value: "middle-eastern", label: "Middle Eastern" },
-];
-
-const DIET_OPTIONS: { value: Diet; label: string }[] = [
-  { value: "vegetarian", label: "Vegetarian" },
-  { value: "non-veg", label: "Non-veg" },
-  { value: "eggless", label: "Eggless" },
-  { value: "vegan", label: "Vegan" },
-  { value: "jain", label: "Jain" },
-];
-
-const PREP_OPTIONS: { value: string; label: string }[] = [
-  { value: "5", label: "Under 5 min" },
-  { value: "15", label: "Under 15 min" },
-  { value: "30", label: "Under 30 min" },
-  { value: "any", label: "No limit" },
-];
-
-const COOK_OPTIONS: { value: string; label: string }[] = [
-  { value: "15", label: "Under 15 min" },
-  { value: "30", label: "Under 30 min" },
-  { value: "60", label: "Under 60 min" },
-  { value: "any", label: "No limit" },
-];
-
-const VIBE_OPTIONS: { value: Vibe; label: string }[] = [
-  { value: "comforting", label: "Comforting" },
-  { value: "light", label: "Light" },
-  { value: "spicy", label: "Spicy" },
-  { value: "one-pot", label: "One-pot" },
-  { value: "healthy", label: "Healthy" },
-  { value: "indulgent", label: "Indulgent" },
-  { value: "impressive", label: "Impressive" },
-];
-
-const MAIN_OPTIONS: { value: MainIngredient; label: string }[] = [
-  { value: "chicken", label: "Chicken" },
-  { value: "paneer", label: "Paneer" },
-  { value: "fish", label: "Fish" },
-  { value: "eggs", label: "Eggs" },
-  { value: "vegetables", label: "Vegetables" },
-  { value: "pasta", label: "Pasta" },
-  { value: "rice", label: "Rice" },
-  { value: "lentils", label: "Lentils" },
-  { value: "tofu", label: "Tofu" },
-];
 
 export default function Form() {
   const navigate = useNavigate();
@@ -128,34 +75,56 @@ export default function Form() {
 
   return (
     <>
-      {/* Sticky top header — pins the title + "surprise me" link as you scroll.
-          Tighter top inset than other pages since the header now stays in view.
-          On md+ the primary CTA also lives here (right cluster, inline-left of
-          the theme toggle) and the mobile sticky-bottom CTA is hidden. */}
-      <div
-        className="sticky top-0 z-20 bg-paper/60 backdrop-blur-lg"
-        style={{ paddingTop: "max(env(safe-area-inset-top), 20px)" }}
+      {/* Fixed top bar — chrome only. Hamburger left, theme toggle right;
+          on md+ the primary "Find recipes" CTA sits between them. Title
+          and description live in the body now (scroll away normally), so
+          this bar is just navigation + global controls. items-center so
+          every element shares the same vertical axis without margin
+          tweaks. py-2 around the 40px buttons gives a 56px-tall bar.
+          `fixed` (not sticky) so iOS rubber-band overscroll doesn't
+          bounce it — matches the bottom CTA's locked-to-viewport feel.
+          Main below compensates with explicit padding-top since the
+          bar is now out of document flow. */}
+      <TopBar position="fixed">
+        <header className="mx-auto flex max-w-md items-center px-3 py-2 md:max-w-[1280px] md:px-8 lg:px-10">
+          <HamburgerButton />
+          {/* Right cluster: Find recipes CTA on md+. Theme toggle moved
+              to the drawer (M3 phase 3) — global preference, not a
+              per-screen control. */}
+          <button
+            type="button"
+            onClick={findRecipes}
+            className="btn-primary btn-primary-compact focus-ring ml-auto hidden md:inline-flex"
+          >
+            Find recipes
+          </button>
+        </header>
+      </TopBar>
+
+      {/* paddingTop = max(safe-area, 8px) [bar's own top pad]
+                       + 56px              [header py-2 + 40px button]
+                       + 32px              [desired gap to title — was pt-8]
+          So title baseline matches what the previous sticky layout
+          gave us, while the bar above is rock-solid against overscroll. */}
+      <main
+        className="mx-auto max-w-md px-5 pb-32 md:max-w-[1280px] md:px-8 md:pb-16 lg:px-10"
+        style={{
+          paddingTop: "calc(max(env(safe-area-inset-top), 8px) + 88px)",
+        }}
       >
-        <header className="mx-auto max-w-md px-5 pb-2 md:max-w-[1280px] md:px-8 lg:px-10">
-          {/* Title + right-cluster. Right-cluster on md+ is [CTA · toggle];
-              on phone it's just the toggle. */}
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="text-title">What are we cooking?</h1>
-            <div className="mt-1 flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={findRecipes}
-                className="btn-primary btn-primary-compact focus-ring hidden md:inline-flex"
-              >
-                Find recipes
-              </button>
-              <div className="-mr-2">
-                <ThemeToggle />
-              </div>
-            </div>
-          </div>
+        {/* Intro group — title + desc are tightly grouped (mt-2 between
+            them), then a bigger break (mt-10) before the form starts.
+            Spacings are deliberate per context, not universal. */}
+        <div>
+          <h1 className="text-title">What are we cooking today?</h1>
           <p className="mt-2 text-body text-ink-muted">
-            Tap a few things to find recipes, or{" "}
+            Tap a few things to find recipes,
+            {/* Forced break on mobile keeps the copy tight and stops
+                the trailing period from orphaning on its own line. On
+                md+ the wider container fits everything cleanly so we
+                let it flow. */}
+            <br className="md:hidden" />{" "}
+            or{" "}
             <button
               type="button"
               onClick={surpriseMe}
@@ -165,14 +134,13 @@ export default function Form() {
             </button>
             .
           </p>
-        </header>
-      </div>
+        </div>
 
-      <main className="mx-auto max-w-md px-5 pt-6 pb-32 md:max-w-[1280px] md:px-8 md:pt-10 md:pb-16 lg:px-10">
         {/* Chip-group container: stacked column on phone, 2-up tablet,
             3-up desktop. Vertical gap a touch larger than horizontal so
-            section titles still read as anchors when wrapping. */}
-        <div className="chip-stagger flex flex-col gap-10 md:grid md:grid-cols-2 md:gap-x-10 md:gap-y-12 lg:grid-cols-3">
+            section titles still read as anchors when wrapping. mt-10
+            separates the form clearly from the intro above. */}
+        <div className="chip-stagger mt-10 flex flex-col gap-10 md:grid md:grid-cols-2 md:gap-x-10 md:gap-y-12 lg:grid-cols-3">
           <ChipGroup
             id="meal"
             label="Meal"

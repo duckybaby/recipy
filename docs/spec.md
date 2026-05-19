@@ -45,7 +45,7 @@ The Recipe page exposes lateral actions: **More like this** (push to Results wit
 
 ## 3. Screens
 
-### 3.1 Form — "What are we cooking?"
+### 3.1 Form — "What are we cooking today?"
 
 The home screen. A single column of chip groups. Multi-select within most groups; AND across groups (picking Dinner AND South Indian narrows to the intersection).
 
@@ -195,7 +195,7 @@ Before any other screen renders, recipy checks Firebase Auth. If a user is signe
 
 - Centred column, same `max-w-md` cap as Form.
 - App name "recipy" in Fraunces serif at `text-title` scale.
-- One-line tagline ("What are we cooking?").
+- One-line tagline ("What are we cooking today?").
 - Two-line value prop: "Find a real recipe, scale it for your household, walk through it step by step."
 - **Sign in with Google** button — uses Google's branded button per their identity guidelines (white background, Google G mark, "Sign in with Google" label).
 - Reassurance line at the bottom: "Your saved recipes and preferences live on your account."
@@ -219,9 +219,14 @@ Before any other screen renders, recipy checks Firebase Auth. If a user is signe
 
 ### 3.6 Hamburger drawer — M3
 
-Global navigation accessible from every screen except Cooking mode. Cooking stays focused — no nav distractions mid-step.
+Global navigation that lives only on **core pages** — the top-level destinations the user can jump between via the drawer:
 
-**Trigger:** hamburger icon top-left of the top bar on Form, Results, Recipe. On screens with an existing back arrow (Results, Recipe), the hamburger sits to the far left and the back arrow is next to it — two distinct slots, two distinct affordances.
+| Type | Pages | Top-left affordance |
+|---|---|---|
+| **Core** | Find recipes (Form), Saved recipes, Preferences, future top-level destinations | Hamburger (opens drawer) |
+| **Inner** | Results, Recipe, Cooking | Back arrow only — these are drill-downs from a core page, not destinations themselves |
+
+The mental model: hamburger means "I want to jump to a different part of the app." Back arrow means "I want to retreat within the flow I'm in." A screen having both dilutes the model and adds visual noise. Inner pages keep the existing back arrow without picking up a hamburger.
 
 **Drawer content (top to bottom):**
 
@@ -371,7 +376,7 @@ Tailwind v4 `@theme` block in `src/styles/index.css`:
 
 `Inter` for sans-serif; system fallback. Headings in 500 weight, body in 400. Sentence case everywhere — never ALL CAPS, never Title Case. Tone: friendly without being twee.
 
-- "What are we cooking?" not "Welcome back, chef!"
+- "What are we cooking today?" not "Welcome back, chef!"
 - "Find recipes" not "Discover deliciousness."
 - "Something looks wrong?" not "Help us improve."
 

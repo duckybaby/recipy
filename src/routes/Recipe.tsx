@@ -35,6 +35,7 @@ import { iconFor as equipmentIconFor } from "../lib/equipmentIcons";
 import { Loader } from "../components/Loader";
 import { IngredientRow } from "../components/IngredientRow";
 import { ServingsAdjuster } from "../components/ServingsAdjuster";
+import { TopBar } from "../components/TopBar";
 import {
   FeedbackSheet,
   type FeedbackReason,
@@ -522,18 +523,19 @@ export default function Recipe() {
 
   return (
     <>
-      <main className="pb-40 lg:pb-16">
-        {/* Sticky top bar — single blur region. When the in-flow tabs scroll
+      <main
+        className="pb-40 lg:!pt-0 lg:pb-16"
+        style={{ paddingTop: topBarH }}
+      >
+        {/* Fixed top bar — single blur region. When the in-flow tabs scroll
             past, a second copy of the TabStrip slides in inside this same
-            wrapper, so the blur stays one continuous surface (no seam).
-            Hidden at lg+: back / share / kebab render inside the left panel,
-            tabs are sticky in the right panel. No top bar on desktop. */}
-        <div
-          ref={topBarRef}
-          className="sticky top-0 z-30 bg-paper/60 backdrop-blur-lg lg:hidden"
-          style={{ paddingTop: "max(env(safe-area-inset-top), 8px)" }}
-        >
-          <div className="mx-auto flex max-w-md items-center gap-1 px-3 pb-2 md:max-w-2xl md:px-8 lg:px-10">
+            wrapper, so the blur stays one continuous surface (no seam). The
+            bar grows when that happens; main's paddingTop tracks topBarH so
+            the body always starts just below the bar. Hidden at lg+: back /
+            share / kebab render inside the left panel, tabs are sticky in
+            the right panel. No top bar on desktop. */}
+        <TopBar ref={topBarRef} position="fixed" className="z-30 lg:hidden">
+          <div className="mx-auto flex max-w-md items-center gap-1 px-3 py-2 md:max-w-2xl md:px-8 lg:px-10">
             <button
               type="button"
               aria-label="Back to results"
@@ -547,7 +549,7 @@ export default function Recipe() {
                 the currently-displayed recipe, including alt-swaps. */}
             <h2
               aria-hidden={!titleInBar}
-              className={`truncate text-strong font-semibold text-ink transition-opacity duration-150 ${
+              className={`truncate font-sans text-strong font-semibold text-ink transition-opacity duration-150 ${
                 titleInBar ? "opacity-100" : "opacity-0"
               }`}
             >
@@ -599,7 +601,7 @@ export default function Recipe() {
               </div>
             </div>
           </div>
-        </div>
+        </TopBar>
 
         {/* Page body — single column < lg, 1:3 sticky-left grid at lg+.
             Left aside: action row / identity / stats / make-ahead / inline
