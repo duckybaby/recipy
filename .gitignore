@@ -18,12 +18,16 @@ dist-ssr
 .env
 .env.*
 !.env.example
+sa.json
+*-service-account.json
+.runtimeconfig.json
 
 # Firebase
 .firebase/
 .firebaserc.local
 functions/lib/
 functions/node_modules/
+scripts/node_modules/
 
 # Firebase CLI agent-skills (dev-machine tooling, not part of the app)
 .agents/

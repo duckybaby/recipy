@@ -46,6 +46,7 @@ import {
   streamWithWebSearch,
 } from "./anthropic";
 import { readCache, writeCache, logFeedback } from "./cache";
+import { upsertLibraryBatch, upsertLibraryRecipe } from "./library";
 import { verifyAppCheck } from "./appCheck";
 import { JsonArrayStream } from "./streamingJson";
 
@@ -295,6 +296,7 @@ app.post(
     writeLine({ type: "done", count: collected.length, cached: false });
     res.end();
     await writeCache(filters, collected);
+    await upsertLibraryBatch(collected, filters);
     return;
   }),
 );
@@ -337,7 +339,9 @@ app.post(
         );
         continue;
       }
-      return res.json({ recipe: valid });
+      res.json({ recipe: valid });
+      await upsertLibraryRecipe(valid);
+      return;
     }
     return res
       .status(404)
