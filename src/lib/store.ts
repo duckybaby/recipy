@@ -38,6 +38,8 @@ export const EMPTY_FILTERS: SearchFilters = {
   cookMax: null,
   vibes: [],
   mainIngredients: [],
+  dishTypes: [],          // M4
+  hasVideo: false,        // M4
   surprise: false,
 };
 
@@ -115,14 +117,76 @@ export const useStore = create<AppState>()(
       // but anyone whose store predates this bump still carries their
       // old explicit preference. Wiping just `theme` (not filters /
       // lastSearch / activeRecipe) is the gentlest fix.
-      version: 2,
+      //
+      // v3: M4 recipe-richness. Two changes:
+      //   • SearchFilters gains `dishTypes` and `hasVideo`. Default both
+      //     to empty / false on older persisted filter blobs so destructuring
+      //     never blows up.
+      //   • Recipe.previousVersion (single) → previousVersions[] (stack).
+      //     Walk lastSearch.recipes + activeRecipe.recipe and convert any
+      //     surviving previousVersion to a 1-entry previousVersions array.
+      //     The version itself (a stale Recipe with the old shape) goes
+      //     through unmigrated — its fields don't crash readers, just
+      //     render "—" for protein / no hero image / no video embed.
+      version: 3,
       migrate: (persistedState, fromVersion) => {
-        if (fromVersion < 2 && persistedState && typeof persistedState === "object") {
-          const rest = { ...(persistedState as Record<string, unknown>) };
-          rest.theme = null;
-          return rest as Partial<AppState>;
+        if (!persistedState || typeof persistedState !== "object") {
+          return persistedState as Partial<AppState>;
         }
-        return persistedState as Partial<AppState>;
+        const next = { ...(persistedState as Record<string, unknown>) };
+        if (fromVersion < 2) {
+          next.theme = null;
+        }
+        if (fromVersion < 3) {
+          // Backfill new SearchFilters fields on `filters`.
+          if (next.filters && typeof next.filters === "object") {
+            const f = next.filters as Record<string, unknown>;
+            if (!Array.isArray(f.dishTypes)) f.dishTypes = [];
+            if (typeof f.hasVideo !== "boolean") f.hasVideo = false;
+          }
+          // Same backfill for lastSearch.filters (separate blob).
+          if (
+            next.lastSearch &&
+            typeof next.lastSearch === "object" &&
+            (next.lastSearch as { filters?: unknown }).filters &&
+            typeof (next.lastSearch as { filters: unknown }).filters === "object"
+          ) {
+            const f = (next.lastSearch as { filters: Record<string, unknown> })
+              .filters;
+            if (!Array.isArray(f.dishTypes)) f.dishTypes = [];
+            if (typeof f.hasVideo !== "boolean") f.hasVideo = false;
+          }
+          // Convert previousVersion (singular) → previousVersions[] on every
+          // Recipe we might have persisted. Cheap to walk; we never have
+          // more than ~3 recipes in play at once.
+          const upgradeRecipe = (r: unknown): unknown => {
+            if (!r || typeof r !== "object") return r;
+            const rec = r as Record<string, unknown>;
+            if (rec.previousVersion && !Array.isArray(rec.previousVersions)) {
+              rec.previousVersions = [rec.previousVersion];
+            }
+            delete rec.previousVersion;
+            return rec;
+          };
+          if (
+            next.lastSearch &&
+            typeof next.lastSearch === "object" &&
+            Array.isArray((next.lastSearch as { recipes?: unknown }).recipes)
+          ) {
+            const arr = (next.lastSearch as { recipes: unknown[] }).recipes;
+            for (let i = 0; i < arr.length; i++) arr[i] = upgradeRecipe(arr[i]);
+          }
+          if (
+            next.activeRecipe &&
+            typeof next.activeRecipe === "object" &&
+            (next.activeRecipe as { recipe?: unknown }).recipe
+          ) {
+            (next.activeRecipe as { recipe: unknown }).recipe = upgradeRecipe(
+              (next.activeRecipe as { recipe: unknown }).recipe,
+            );
+          }
+        }
+        return next as Partial<AppState>;
       },
       // Persist every slice the early init script + back-nav restore care
       // about. `theme` matters here because the inline script in index.html
@@ -165,19 +229,28 @@ export function getFreshLastSearch(): LastSearchState | null {
  * is the caller's responsibility — different consumers care about different
  * fallbacks.
  *
- * Also matches against `previousVersion.id` so deep links to a recipe that's
- * since been alt-swapped still resolve to the prior version rather than
+ * Also walks the `previousVersions` stack so deep links to a recipe that's
+ * since been alt-swapped still resolve to that earlier version rather than
  * dead-ending on "couldn't find that recipe".
  */
 export function findRecipeInStore(id: string): Recipe | null {
   const s = useStore.getState();
   const active = s.activeRecipe?.recipe;
-  if (active?.id === id) return active;
-  if (active?.previousVersion?.id === id) return active.previousVersion;
+  const matchInStack = (r: Recipe): Recipe | null => {
+    if (r.id === id) return r;
+    for (const prev of r.previousVersions ?? []) {
+      if (prev.id === id) return prev;
+    }
+    return null;
+  };
+  if (active) {
+    const hit = matchInStack(active);
+    if (hit) return hit;
+  }
   if (s.lastSearch) {
     for (const r of s.lastSearch.recipes) {
-      if (r.id === id) return r;
-      if (r.previousVersion?.id === id) return r.previousVersion;
+      const hit = matchInStack(r);
+      if (hit) return hit;
     }
   }
   return null;
@@ -194,11 +267,13 @@ export function filtersEqual(a: SearchFilters, b: SearchFilters): boolean {
   if (a.cookMax !== b.cookMax) return false;
   if ((a.surprise ?? false) !== (b.surprise ?? false)) return false;
   if ((a.similarTo ?? null) !== (b.similarTo ?? null)) return false;
+  if ((a.hasVideo ?? false) !== (b.hasVideo ?? false)) return false;
   if (!arrayEqual(a.meal, b.meal)) return false;
   if (!arrayEqual(a.cuisines, b.cuisines)) return false;
   if (!arrayEqual(a.diet, b.diet)) return false;
   if (!arrayEqual(a.vibes, b.vibes)) return false;
   if (!arrayEqual(a.mainIngredients, b.mainIngredients)) return false;
+  if (!arrayEqual(a.dishTypes ?? [], b.dishTypes ?? [])) return false;
   return true;
 }
 

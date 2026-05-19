@@ -164,7 +164,7 @@ const realApi = {
       { dish, excludeUrls },
     ),
 
-  recomputeField: (recipe: Recipe, field: "calories" | "time") =>
+  recomputeField: (recipe: Recipe, field: "calories" | "time" | "protein") =>
     post<{ recipe: Recipe; field: typeof field }, { value: number }>(
       "/api/recompute-field",
       { recipe, field },

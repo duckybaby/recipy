@@ -13,11 +13,13 @@ Each Recipe object MUST have these fields and types:
   "source": {
     "url": string,                           // canonical recipe page URL
     "siteName": string,                      // e.g. "archanaskitchen.com"
-    "imageUrl": string | null,               // hero image from the source if available
+    "imageUrl": string | null,               // direct URL to the hero image on the source page; null if none
     "fetchedAt": string                      // ISO timestamp
   },
   "title": string,                           // dish name
   "tagline": string,                         // one sentence, max 12 words
+  "videoUrl": string | null,                 // YouTube/Vimeo embed URL if the page has one; null otherwise
+  "dishType": string[],                      // dish-shape tags from the canonical list (see rules); [] if none fit
   "servings": { "base": number, "current": number },   // both equal at first
   "times": { "prepMinutes": number, "cookMinutes": number, "totalMinutes": number },
   "difficulty": {
@@ -25,6 +27,7 @@ Each Recipe object MUST have these fields and types:
     "label": "effortless" | "needs a bit of focus" | "weekend project" | "advanced"   // exact strings, no synonyms
   },
   "calories": { "perServing": number, "inferenceSource": "page" | "estimated" },
+  "protein": { "perServingGrams": number, "inferenceSource": "page" | "estimated" } | null,   // per-serving protein in grams; null only if you genuinely cannot estimate
   "equipment": string[],                     // only NON-baseline items; [] if all baseline
   "makeAhead": string | null,                // null if no lead time required
   "dietFlags": string[],                     // e.g. ["vegetarian", "contains dairy"]
@@ -75,7 +78,10 @@ Rules:
 - Detect "pairs well with" sides if the dish is conventionally served with accompaniments. Null if standalone.
 - "whyPicked" is an array of 2-4 short tags (1-3 words each) derived from the user's active filters. Examples: ["30m", "comforting", "vegetarian"] or ["15m", "eggless", "breakfast"]. Never write full phrases like "total time under 15 minutes" or "South Indian cuisine" — those are too long. Strip filler words; surface the essence.
 - For each ingredient, classify as pantry-staple, likely-available, or specialty. This is purely a delivery-availability hint for Instamart (a major Indian grocery delivery service), NOT a hint about what cuisines to favour. Use commonness in modern urban Indian retail (chain supermarkets + neighbourhood stores) as the yardstick. Set instamart.available to true unless classification is "specialty", in which case false. productId and price are always null in this version.
-- "imageUrl" in the source object MUST always be null. The frontend does not display images in v1. Do not waste effort finding image URLs and do not invent any — just emit null.
+- "imageUrl" in the source object: emit the direct URL of the recipe's hero image from the source page when one exists. It must be a real, fully-qualified https URL you actually saw on the page during web_search — do NOT invent URLs and do NOT use placeholder / CDN tracking URLs that won't resolve standalone. Emit null when the page genuinely has no hero image. The frontend renders it as the recipe's lead visual.
+- "videoUrl": emit the canonical embed URL of a YouTube or Vimeo video the source page has embedded (e.g. https://www.youtube.com/embed/<id> or https://player.vimeo.com/video/<id>). Watch / share URLs are acceptable too — the frontend converts to the embed form. Emit null when the source page has no embedded video. Do not search YouTube to find an unrelated cooking video — the field is for videos the source page itself hosts or embeds.
+- "dishType": tag the dish with one or more shapes from this list when they clearly apply: ["curry", "stir-fry", "soup", "salad", "smoothie", "bowl", "sandwich", "wrap", "pasta", "casserole", "bake", "roast", "grill", "pizza", "pancake-dosa"]. Multiple tags are OK ("bowl" + "salad" for grain bowls, "bake" + "casserole" for a pasta bake). Emit [] when none fit (e.g. for a plain protein cooked solo).
+- "protein": estimate grams of protein per serving from the ingredients (eggs ~6g each, paneer ~18g per 100g, chicken breast ~30g per 100g, lentils cooked ~9g per 100g, etc.). inferenceSource = "page" if the source explicitly lists it, "estimated" otherwise. Always emit a number — only emit null if the ingredient list is genuinely too vague (rare).
 - For each step, parse any explicit duration (e.g. "simmer for 8 minutes") into timerSeconds; otherwise null. Round to nearest 30 seconds.
 - Output ONLY the JSON array — no preamble, no explanation, no markdown fences, no commentary.
 - Output COMPACT JSON (no extra whitespace, no pretty-printing). Keep step text under 200 characters each. Tagline under 12 words. Dietary flag list under 5 items.
@@ -114,11 +120,36 @@ const DIET_LABEL: Record<string, string> = {
 const VIBE_LABEL: Record<string, string> = {
   comforting: "comforting",
   light: "light",
+  // M4 health-intent chips. Translated to descriptive phrases the search
+  // prompt can act on rather than dropped in as bare vibes.
+  lighter: "lighter (lower-calorie, smaller-portion approach)",
+  "high-protein": "high protein (aim for at least 25 g of protein per serving)",
   spicy: "spicy",
   "one-pot": "one-pot",
   healthy: "healthy",
   indulgent: "indulgent",
   impressive: "impressive",
+};
+
+// M4: dish-shape labels for the prompt. Mirrors filterOptions.ts on the
+// frontend. Custom user-added dish types ("custom:..." prefix) are
+// resolved by `resolveLabel` and pass through as plain text.
+const DISH_TYPE_LABEL: Record<string, string> = {
+  curry: "curry",
+  "stir-fry": "stir-fry",
+  soup: "soup",
+  salad: "salad",
+  smoothie: "smoothie",
+  bowl: "bowl",
+  sandwich: "sandwich",
+  wrap: "wrap",
+  pasta: "pasta",
+  casserole: "casserole",
+  bake: "bake",
+  roast: "roast",
+  grill: "grill",
+  pizza: "pizza",
+  "pancake-dosa": "pancake or dosa",
 };
 
 /** Resolve a filter value to natural language for the prompt. Canonical
@@ -181,11 +212,23 @@ export function buildSearchUserPrompt(filters: SearchFilters): string {
             .join(", ")
     }`,
   );
+  lines.push(
+    `- Dish type: ${listOrAny(filters.dishTypes ?? [], (s) =>
+      resolveLabel(s, DISH_TYPE_LABEL),
+    )}`,
+  );
 
   if (filters.similarTo) {
     lines.push("");
     lines.push(
       `Bias toward dishes similar in style or technique to: "${filters.similarTo}". Do not return the same dish.`,
+    );
+  }
+
+  if (filters.hasVideo) {
+    lines.push("");
+    lines.push(
+      "Prefer recipes whose source page has an embedded YouTube or Vimeo video. This is a soft preference — if the other filters can only be honoured by videoless pages, return those instead.",
     );
   }
 
@@ -211,7 +254,7 @@ export function buildAlternateSourcePrompt(
 
 /** Build the user prompt for /api/recompute-field. */
 export function buildRecomputePrompt(
-  field: "calories" | "time",
+  field: "calories" | "time" | "protein",
   recipeTitle: string,
   ingredientsText: string,
   stepsText: string,
@@ -224,6 +267,16 @@ export function buildRecomputePrompt(
       ingredientsText,
       "",
       'Return ONLY a JSON object: { "value": <integer kcal per serving> }. No prose.',
+    ].join("\n");
+  }
+  if (field === "protein") {
+    return [
+      `Estimate grams of protein per serving for this dish: ${recipeTitle}`,
+      "",
+      "Ingredients (per the base servings):",
+      ingredientsText,
+      "",
+      'Return ONLY a JSON object: { "value": <integer grams of protein per serving> }. No prose.',
     ].join("\n");
   }
   return [

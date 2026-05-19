@@ -77,10 +77,14 @@ async function findAlternateSource(
 
 async function recomputeField(
   _recipe: Recipe,
-  field: "calories" | "time",
+  field: "calories" | "time" | "protein",
 ): Promise<{ value: number }> {
   await wait(RECOMPUTE_DELAY_MS);
-  return { value: field === "calories" ? 310 : 35 };
+  // Plausible mock values per field: calories ~310 kcal, time ~35 min,
+  // protein ~22 g per serving for the canned mock recipes.
+  if (field === "calories") return { value: 310 };
+  if (field === "protein") return { value: 22 };
+  return { value: 35 };
 }
 
 async function getSubstitutions(

@@ -72,6 +72,8 @@ export function toApiBody(filters: SearchFilters): SearchFilters {
         : filters.cookMax,
     vibes: filters.vibes,
     mainIngredients: filters.mainIngredients,
+    dishTypes: filters.dishTypes ?? [],
+    hasVideo: filters.hasVideo ?? false,
     surprise: filters.surprise ?? false,
     ...(filters.similarTo ? { similarTo: filters.similarTo } : {}),
   };

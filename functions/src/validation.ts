@@ -65,6 +65,8 @@ const DietField = enumOrCustom([
 const VibeField = enumOrCustom([
   "comforting",
   "light",
+  "lighter",          // M4: prompt biases to lower calorie / smaller portions
+  "high-protein",     // M4: prompt biases to ≥25g protein per serving
   "spicy",
   "one-pot",
   "healthy",
@@ -81,6 +83,26 @@ const MainIngredientField = enumOrCustom([
   "rice",
   "lentils",
   "tofu",
+] as const);
+// M4: dish-shape filter — what the dish IS, distinct from main ingredient.
+// Selecting "salad" + "chicken" surfaces chicken salads; selecting "smoothie"
+// + "fruit" surfaces fruit smoothies.
+const DishTypeField = enumOrCustom([
+  "curry",
+  "stir-fry",
+  "soup",
+  "salad",
+  "smoothie",
+  "bowl",
+  "sandwich",
+  "wrap",
+  "pasta",
+  "casserole",
+  "bake",
+  "roast",
+  "grill",
+  "pizza",
+  "pancake-dosa",
 ] as const);
 
 // Single-select prep/cook max time. Frontend collapses "any" → null
@@ -119,6 +141,10 @@ export const SearchFiltersSchema = z.object({
   cookMax: CookMaxSchema.default(null),
   vibes: z.array(VibeField).default([]),
   mainIngredients: z.array(MainIngredientField).default([]),
+  // M4: dish-shape multi-select (curry / smoothie / salad / etc.)
+  dishTypes: z.array(DishTypeField).default([]),
+  // M4: soft "prefer recipes with an embedded video" hint.
+  hasVideo: z.boolean().default(false),
   surprise: z.boolean().default(false),
   similarTo: SimilarToSchema.optional(),
 });
@@ -209,6 +235,22 @@ export const RecipeSchema = z.object({
     perServing: z.number().int().nonnegative(),
     inferenceSource: z.enum(["page", "estimated"]),
   }),
+  // M4: per-serving protein in grams. Nullable so pre-M4 cached / library
+  // entries still parse — they just render "—" on the Recipe page.
+  protein: z
+    .object({
+      perServingGrams: z.number().nonnegative(),
+      inferenceSource: z.enum(["page", "estimated"]),
+    })
+    .nullable()
+    .default(null),
+  // M4: YouTube / Vimeo embed URL if the source page has one. Null when
+  // not available; Recipe page hides the video slot entirely.
+  videoUrl: z.string().url().nullable().default(null),
+  // M4: dish shape(s). Multiple OK ("bowl" + "salad" for grain bowls).
+  // Free-form string so old data parses and so Anthropic can return a
+  // dish type we haven't enumerated. Empty array when nothing fits.
+  dishType: z.array(z.string()).default([]),
   equipment: z.array(z.string()),
   makeAhead: z.string().nullable(),
   dietFlags: z.array(z.string()),
@@ -231,7 +273,7 @@ export const AlternateSourceBodySchema = z.object({
 
 export const RecomputeFieldBodySchema = z.object({
   recipe: RecipeSchema,
-  field: z.enum(["calories", "time"]),
+  field: z.enum(["calories", "time", "protein"]),
 });
 
 export const SubstitutionsBodySchema = z.object({

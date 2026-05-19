@@ -6,11 +6,18 @@ export type Recipe = {
   source: {
     url: string;
     siteName: string;
-    imageUrl: string | null;
+    imageUrl: string | null;            // M4: rendered as hero when non-null
     fetchedAt: string; // ISO
   };
   title: string;
   tagline: string;
+  // M4: YouTube / Vimeo embed URL when the source page has one. Null hides
+  // the entire video slot on the Recipe page.
+  videoUrl: string | null;
+  // M4: dish shape(s) — "salad", "smoothie", "bowl", etc. Free-form strings
+  // so old data parses and Anthropic can return shapes outside our chip
+  // presets. Empty array means "none specified."
+  dishType: string[];
   servings: {
     base: number;
     current: number;
@@ -32,6 +39,12 @@ export type Recipe = {
     perServing: number;
     inferenceSource: "page" | "estimated";
   };
+  // M4: per-serving protein in grams. Null on pre-M4 cached / library data;
+  // the Recipe page shows "—" in that cell.
+  protein: {
+    perServingGrams: number;
+    inferenceSource: "page" | "estimated";
+  } | null;
   equipment: string[];
   makeAhead: string | null;
   dietFlags: string[];
@@ -39,12 +52,10 @@ export type Recipe = {
   whyPicked: string[];
   ingredients: Ingredient[];
   steps: Step[];
-  // Set when the user found an alternate source for this dish. Holds the
-  // single immediately-prior version so the M2 compare view has both.
-  // Capped at one level deep — when a second alt-swap happens, the
-  // *grand*-previous is dropped (we keep at most 2 versions per slot).
+  // M4: stack of prior versions, most-recent first. Capped at 3 entries.
+  // Each "Find different recipe" tap pushes the displaced recipe here.
   // Always omitted from API responses; populated client-side only.
-  previousVersion?: Recipe;
+  previousVersions?: Recipe[];
 };
 
 export type Ingredient = {
@@ -134,6 +145,8 @@ export type CookMax = 15 | 30 | 60 | "any" | null;
 export type Vibe =
   | "comforting"
   | "light"
+  | "lighter"        // M4
+  | "high-protein"   // M4
   | "spicy"
   | "one-pot"
   | "healthy"
@@ -151,6 +164,27 @@ export type MainIngredient =
   | "lentils"
   | "tofu";
 
+// M4: dish-shape filter. Distinct from MainIngredient — "salad" + "chicken"
+// surfaces chicken salads, "smoothie" + "fruit" surfaces fruit smoothies.
+// Custom user-added entries get serialised as "custom:<value>" same as
+// every other chip group.
+export type DishType =
+  | "curry"
+  | "stir-fry"
+  | "soup"
+  | "salad"
+  | "smoothie"
+  | "bowl"
+  | "sandwich"
+  | "wrap"
+  | "pasta"
+  | "casserole"
+  | "bake"
+  | "roast"
+  | "grill"
+  | "pizza"
+  | "pancake-dosa";
+
 export type SearchFilters = {
   meal: Meal[];
   cuisines: Cuisine[];
@@ -159,6 +193,10 @@ export type SearchFilters = {
   cookMax: CookMax;
   vibes: Vibe[];
   mainIngredients: MainIngredient[];
+  // M4: dish-shape multi-select.
+  dishTypes: DishType[];
+  // M4: soft "only recipes with a video" toggle.
+  hasVideo: boolean;
   surprise?: boolean;
   // Set by "More like this" — biases the next search toward this dish.
   similarTo?: string;

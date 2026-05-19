@@ -9,6 +9,7 @@ import type {
   Diet,
   Vibe,
   MainIngredient,
+  DishType,
 } from "./types";
 
 export const MEAL_OPTIONS: { value: Meal; label: string }[] = [
@@ -58,6 +59,8 @@ export const COOK_OPTIONS: { value: string; label: string }[] = [
 export const VIBE_OPTIONS: { value: Vibe; label: string }[] = [
   { value: "comforting", label: "Comforting" },
   { value: "light", label: "Light" },
+  { value: "lighter", label: "Lighter" },             // M4
+  { value: "high-protein", label: "High protein" },    // M4
   { value: "spicy", label: "Spicy" },
   { value: "one-pot", label: "One-pot" },
   { value: "healthy", label: "Healthy" },
@@ -75,4 +78,23 @@ export const MAIN_OPTIONS: { value: MainIngredient; label: string }[] = [
   { value: "rice", label: "Rice" },
   { value: "lentils", label: "Lentils" },
   { value: "tofu", label: "Tofu" },
+];
+
+// M4: dish-shape filter — distinct from main ingredient.
+export const DISH_TYPE_OPTIONS: { value: DishType; label: string }[] = [
+  { value: "curry", label: "Curry" },
+  { value: "stir-fry", label: "Stir-fry" },
+  { value: "soup", label: "Soup" },
+  { value: "salad", label: "Salad" },
+  { value: "smoothie", label: "Smoothie" },
+  { value: "bowl", label: "Bowl" },
+  { value: "sandwich", label: "Sandwich" },
+  { value: "wrap", label: "Wrap" },
+  { value: "pasta", label: "Pasta" },
+  { value: "casserole", label: "Casserole" },
+  { value: "bake", label: "Bake" },
+  { value: "roast", label: "Roast" },
+  { value: "grill", label: "Grill" },
+  { value: "pizza", label: "Pizza" },
+  { value: "pancake-dosa", label: "Pancake / Dosa" },
 ];
