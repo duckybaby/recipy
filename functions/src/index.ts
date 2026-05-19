@@ -165,30 +165,47 @@ function asyncHandler(
   };
 }
 
-/** HEAD an imageUrl with a 2s timeout. Returns the URL when reachable
- *  (any 2xx), null otherwise. Prompts get a sharper instruction to prefer
- *  og:image and avoid signed-CDN paths, but Claude still occasionally
- *  captures a URL whose signature only validates from within the source
- *  page (Simply Recipes' /thmb/<hash>=/ pattern is the prototype). Those
- *  return 400 on direct hotlink — better to null the URL at the source
- *  and let the placeholder render than ship a broken-image icon to the
- *  Recipe page. Spoofs a Mozilla UA so CDNs that block bot UAs don't
- *  produce false negatives; an image hotlink in a real browser would
- *  send a Mozilla-class UA too. */
+/** Fetch the first byte of imageUrl with a 3s timeout. Returns the URL
+ *  on any 2xx (200 full / 206 partial), null otherwise. Verifies the URL
+ *  is hotlinkable from a server context before the Recipe page ever
+ *  tries to render it — sites that ship signed-CDN paths in og:image
+ *  (Simply Recipes /thmb/<hash>=/ is the prototype) often 400 on direct
+ *  hotlink even when the page itself loads, and a broken-image icon is
+ *  worse than a clean placeholder.
+ *
+ *  Why GET + Range instead of HEAD: many image CDNs return 405 on HEAD
+ *  even when GET works, so HEAD would null valid URLs. GET with
+ *  Range: bytes=0-0 asks for one byte — CDNs that honour Range respond
+ *  206 (partial content); CDNs that ignore Range still respond 200
+ *  with the full body. Either way the URL is proven fetchable.
+ *
+ *  UA is spoofed to Mozilla-class so CDNs that block default Node UAs
+ *  don't produce false negatives. Failures log so Cloud Logs surface
+ *  which URLs are dropping out — without that, a sweeping "everything
+ *  is null" outcome is invisible. */
 async function validateImageUrl(url: string | null): Promise<string | null> {
   if (!url) return null;
   try {
     const res = await fetch(url, {
-      method: "HEAD",
-      signal: AbortSignal.timeout(2000),
+      method: "GET",
+      signal: AbortSignal.timeout(3000),
       headers: {
         "User-Agent":
           "Mozilla/5.0 (recipy image validator) AppleWebKit/537.36",
+        Range: "bytes=0-0",
       },
       redirect: "follow",
     });
-    return res.ok ? url : null;
-  } catch {
+    if (res.ok) return url;
+    console.warn(
+      `validateImageUrl: ${res.status} ${res.statusText} for ${url}`,
+    );
+    return null;
+  } catch (err) {
+    console.warn(
+      `validateImageUrl: fetch error for ${url}:`,
+      err instanceof Error ? err.message : String(err),
+    );
     return null;
   }
 }
