@@ -165,6 +165,34 @@ function asyncHandler(
   };
 }
 
+/** HEAD an imageUrl with a 2s timeout. Returns the URL when reachable
+ *  (any 2xx), null otherwise. Prompts get a sharper instruction to prefer
+ *  og:image and avoid signed-CDN paths, but Claude still occasionally
+ *  captures a URL whose signature only validates from within the source
+ *  page (Simply Recipes' /thmb/<hash>=/ pattern is the prototype). Those
+ *  return 400 on direct hotlink — better to null the URL at the source
+ *  and let the placeholder render than ship a broken-image icon to the
+ *  Recipe page. Spoofs a Mozilla UA so CDNs that block bot UAs don't
+ *  produce false negatives; an image hotlink in a real browser would
+ *  send a Mozilla-class UA too. */
+async function validateImageUrl(url: string | null): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(2000),
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (recipy image validator) AppleWebKit/537.36",
+      },
+      redirect: "follow",
+    });
+    return res.ok ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Normalise a URL to host+path for cross-call equality checks. Strips
  *  query strings, hash fragments, and trailing slashes — Claude occasionally
  *  appends `?utm=...` or rounds a trailing slash differently on a re-search,
@@ -255,6 +283,14 @@ app.post(
           const withId = reIdRecipe(obj);
           const valid = safeParseRecipe(withId);
           if (valid) {
+            // Validate hero image before emitting. A 400/403/timeout on
+            // the imageUrl produces a broken-image icon on the Recipe
+            // page — better to null it out at the source and let the
+            // paper-soft placeholder render. Adds up to 2s per recipe
+            // when the URL hangs, near-zero when it's reachable.
+            valid.source.imageUrl = await validateImageUrl(
+              valid.source.imageUrl,
+            );
             collected.push(valid);
             writeLine({ type: "recipe", recipe: valid });
           } else {
@@ -340,6 +376,10 @@ app.post(
         );
         continue;
       }
+      // Same image validation as /api/search-recipes — null out the
+      // imageUrl if it won't hotlink, so the Recipe page renders a
+      // clean placeholder rather than a broken-image icon.
+      valid.source.imageUrl = await validateImageUrl(valid.source.imageUrl);
       res.json({ recipe: valid });
       await upsertLibraryRecipe(valid);
       return;
