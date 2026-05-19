@@ -1,4 +1,4 @@
-// Firebase client SDK init + App Check + Auth + Firestore handles.
+// Firebase client SDK init + App Check + Auth handles.
 //
 // App Check cryptographically attests that requests to our Cloud Function
 // come from this real web app on its real domain (via reCAPTCHA v3) —
@@ -9,11 +9,14 @@
 // `browserLocalPersistence` (IndexedDB-backed) so users stay signed in
 // across reboots, browser updates, and schema migrations.
 //
-// Firestore: three named databases — `recipy-cache` (server-only),
-// `recipy-list` (read for authed users), `recipy-users` (per-uid). The
-// client SDK only needs handles to the two it actually talks to:
-// `recipy-list` (read saved-recipe lookups) and `recipy-users`
-// (read/write profile + preferences + saved subcollection).
+// No Firestore client SDK on purpose. All three databases (recipy-cache,
+// recipy-list, recipy-users) are written and read server-side via the
+// Cloud Function's admin SDK; the client posts to /api/user-doc/*
+// (and equivalent) endpoints instead. Going through our own /api
+// (same-origin) avoids firestore.googleapis.com entirely, which uBlock
+// Origin + most privacy filter lists block by default. Future
+// preferences (phase 4) and saved-recipes (phase 5) reuse the same
+// /api/user-doc/* pattern.
 //
 // The values in this file are public Firebase identifiers (not secrets):
 // the `apiKey` here identifies the project but does not grant access on
@@ -29,7 +32,6 @@ import {
   type AppCheck,
 } from "firebase/app-check";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
 
 // In dev, the SDK will generate a debug token instead of calling reCAPTCHA
 // (which would fail on localhost without a public domain). The token is
@@ -100,11 +102,3 @@ export const auth = getAuth(firebaseApp);
 // default `profile email` is what we want (displayName + email +
 // photoURL come back on the user object).
 export const googleProvider = new GoogleAuthProvider();
-
-// ===== Firestore =====
-//
-// Two named databases the client talks to directly. `recipy-cache` is
-// server-only (Cloud Function admin SDK); no client handle needed.
-
-export const dbList = getFirestore(firebaseApp, "recipy-list");
-export const dbUsers = getFirestore(firebaseApp, "recipy-users");

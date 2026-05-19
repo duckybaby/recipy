@@ -47,6 +47,7 @@ import {
 } from "./anthropic";
 import { readCache, writeCache, logFeedback } from "./cache";
 import { upsertLibraryBatch, upsertLibraryRecipe } from "./library";
+import { AuthError, ensureUserDoc, verifyAuthFromHeader } from "./users";
 import { verifyAppCheck } from "./appCheck";
 import { JsonArrayStream } from "./streamingJson";
 
@@ -437,6 +438,33 @@ app.post(
     }
     await logFeedback(parsed.data.recipeId, parsed.data.reason);
     return res.json({ ok: true });
+  }),
+);
+
+// ----- /api/user-doc/ensure -----
+//
+// First-sign-in bootstrap for users/{uid} in recipy-users. The client posts
+// here (same-origin via /api/* hosting rewrite) with a Firebase ID token
+// in the Authorization header. Server-side admin SDK does the actual
+// Firestore write — the browser never hits firestore.googleapis.com,
+// which is otherwise blocked by uBlock Origin and most privacy filter
+// lists. Idempotent: returning users just get their lastSignInAt touched.
+app.post(
+  "/api/user-doc/ensure",
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    try {
+      const claims = await verifyAuthFromHeader(req.header("Authorization"));
+      const result = await ensureUserDoc(claims);
+      return res.json(result);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return res.status(err.status).json({
+          error: { code: err.code, message: err.message },
+        });
+      }
+      throw err;
+    }
   }),
 );
 
