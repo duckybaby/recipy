@@ -24,6 +24,7 @@ import {
   COOK_OPTIONS,
   VIBE_OPTIONS,
   MAIN_OPTIONS,
+  DISH_TYPE_OPTIONS,
 } from "../lib/filterOptions";
 import { EMPTY_FILTERS, useStore } from "../lib/store";
 import type {
@@ -33,6 +34,7 @@ import type {
   Diet,
   Vibe,
   MainIngredient,
+  DishType,
   PrepMax,
   CookMax,
 } from "../lib/types";
@@ -278,6 +280,47 @@ export default function Form() {
               update({ mainIngredients: next as MainIngredient[] })
             }
           />
+          <ChipGroup
+            id="dish-type"
+            label="Dish type"
+            options={DISH_TYPE_OPTIONS}
+            selected={filters.dishTypes ?? []}
+            multi
+            allowAdd
+            onChange={(next) => update({ dishTypes: next as DishType[] })}
+          />
+        </div>
+
+        {/* Has-video toggle (M4) — yes/no preference, not a chip group.
+            Sits below the chips so the form's primary mental model
+            (chips = filter facets) stays clean. The toggle adds a soft
+            prompt hint preferring recipes with embedded videos; it
+            doesn't strictly exclude videoless results. Custom styling
+            (label + switch row) rather than a single checkbox so it
+            visually reads as a setting, not a filter facet. */}
+        <div className="mt-10 flex items-center justify-between rounded-card border border-line bg-paper-soft px-4 py-3">
+          <div className="min-w-0 flex-1 pr-4">
+            <p className="text-strong font-medium text-ink">Only recipes with a video</p>
+            <p className="mt-1 text-caption text-ink-muted">
+              Prefers recipes from pages with an embedded YouTube or Vimeo.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={filters.hasVideo ?? false}
+            onClick={() => update({ hasVideo: !(filters.hasVideo ?? false) })}
+            className={`focus-ring relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
+              filters.hasVideo ? "bg-accent" : "bg-line"
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`inline-block h-5 w-5 transform rounded-full bg-paper shadow-soft transition-transform ${
+                filters.hasVideo ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
         </div>
       </main>
 

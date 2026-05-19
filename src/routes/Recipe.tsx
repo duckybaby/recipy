@@ -21,12 +21,14 @@ import {
   ArrowLeft,
   ChefHat,
   CheckCircle2,
+  ChevronDown,
   Clock,
+  Dumbbell,
   Flame,
   MoreVertical,
+  Play,
   Share2,
   ShoppingCart,
-  Users,
   Zap,
 } from "lucide-react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
@@ -61,6 +63,48 @@ import type { Recipe as RecipeT } from "../lib/types";
 function sentence(s: string): string {
   if (!s) return s;
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Normalise a YouTube / Vimeo watch URL to its embeddable form. Anthropic is
+ * asked to return embed URLs directly, but we defensively handle watch / share
+ * URLs too. Returns null for anything we can't safely embed (unknown host,
+ * malformed URL) — the Recipe page hides the video slot in that case.
+ */
+function toEmbedUrl(input: string): string | null {
+  try {
+    const u = new URL(input);
+    if (u.hostname === "youtu.be") {
+      const id = u.pathname.slice(1).split("/")[0];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (
+      u.hostname.endsWith("youtube.com") ||
+      u.hostname === "youtube-nocookie.com" ||
+      u.hostname === "www.youtube-nocookie.com"
+    ) {
+      if (u.pathname === "/watch") {
+        const id = u.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (u.pathname.startsWith("/embed/")) return u.toString();
+      if (u.pathname.startsWith("/shorts/")) {
+        const id = u.pathname.split("/")[2];
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      return null;
+    }
+    if (u.hostname === "vimeo.com") {
+      const id = u.pathname.split("/").filter(Boolean)[0];
+      return id && /^\d+$/.test(id)
+        ? `https://player.vimeo.com/video/${id}`
+        : null;
+    }
+    if (u.hostname === "player.vimeo.com") return u.toString();
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 type TabKey = "recipe" | "equipment" | "ingredients";
@@ -110,10 +154,11 @@ export default function Recipe() {
   }, [id, location.state]);
 
   const [recipe, setRecipe] = useState<RecipeT | null>(initialRecipe);
-  // The immediately-prior version, if any, lives on `recipe.previousVersion`
-  // (set by onDifferentRecipe). The Results card and Recipe header now show
-  // the current version's title — back-navigating to Results reflects the
-  // swap. The compare-with-previous link reads from `recipe.previousVersion`.
+  // Prior versions live on `recipe.previousVersions` (most-recent first,
+  // capped at 3). onDifferentRecipe pushes; the version-stack sheet at
+  // the bottom of the JSX swaps between them. The Results card / Recipe
+  // header always render the current version's title so back-navigating
+  // to Results reflects whichever version is in view.
   const [servings, setServings] = useState<number>(
     initialRecipe?.servings.base ?? 2,
   );
@@ -125,6 +170,14 @@ export default function Recipe() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [kebabOpen, setKebabOpen] = useState(false);
   const [makeAheadDismissed, setMakeAheadDismissed] = useState(false);
+  // M4: video embed is collapsed by default — the user opts in to play.
+  // Resets to false on every recipe swap so a different recipe never starts
+  // expanded if the previous one was.
+  const [videoOpen, setVideoOpen] = useState(false);
+  // M4: hero image hides when the hotlink fails (no broken-image icon).
+  // Resets on every recipe swap so a previous failure doesn't blank the
+  // new recipe's image.
+  const [imageFailed, setImageFailed] = useState(false);
   const [toast, setToast] = useState<{
     msg: string;
     variant: "info" | "success";
@@ -257,6 +310,11 @@ export default function Recipe() {
     setAppliedSubs({});
     setSelectedForInstamart(new Set());
     setInstamartChecked(false);
+    // M4: each recipe gets its own fresh "video collapsed" + "image OK"
+    // state. Otherwise a swap could leave the new recipe's image hidden
+    // because the previous one's hotlink had failed.
+    setVideoOpen(false);
+    setImageFailed(false);
 
     let cancelled = false;
     setSubstitutionsLoading(true);
@@ -384,12 +442,20 @@ export default function Recipe() {
       const { recipe: alt } = await api.findAlternateSource(recipe.title, [
         recipe.source.url,
       ]);
-      // Cap stored history at 2 versions per slot — strip the alt's own
-      // previousVersion (defensive; API never sets it) and strip the
-      // current's so the new previous never carries a grand-previous.
+      // M4: push the current onto the previousVersions stack (most-recent
+      // first), capped at PREVIOUS_VERSIONS_MAX entries. Strip the
+      // current's own previousVersions before pushing so the stack
+      // doesn't grow recursively. Also strip the alt's own (defensive;
+      // API never sets it client-side, but caching could persist one).
+      const PREVIOUS_VERSIONS_MAX = 3;
+      const carry: RecipeT = { ...currentRecipe, previousVersions: undefined };
+      const nextStack = [carry, ...(currentRecipe.previousVersions ?? [])].slice(
+        0,
+        PREVIOUS_VERSIONS_MAX,
+      );
       const merged: RecipeT = {
         ...alt,
-        previousVersion: { ...currentRecipe, previousVersion: undefined },
+        previousVersions: nextStack,
       };
       setRecipe(merged);
       // Reflect the swap in the Results list so back-nav shows the alternate
@@ -419,8 +485,38 @@ export default function Recipe() {
     }
   };
 
-  const onComparePrevious = () =>
-    showToast("Recipe comparison — coming in M2.");
+  // M4: stack list sheet — taps from "N earlier versions" open it.
+  // Swapping to an earlier version pulls it out of the stack and puts the
+  // current one back in. The side-by-side comparison view stays V2.
+  const [versionSheetOpen, setVersionSheetOpen] = useState(false);
+
+  const swapToPreviousVersion = (versionId: string) => {
+    const stack = recipe.previousVersions ?? [];
+    const idx = stack.findIndex((v) => v.id === versionId);
+    if (idx === -1) return;
+    const target = stack[idx];
+    // New stack: current recipe replaces the slot the target occupied.
+    // Order: current goes where target was, everything else stays in its
+    // relative order. This way each swap moves at most one slot.
+    const nextStack = stack.slice();
+    nextStack[idx] = { ...recipe, previousVersions: undefined };
+    const next: RecipeT = {
+      ...target,
+      previousVersions: nextStack,
+    };
+    setRecipe(next);
+    // Reflect in lastSearch + URL — same as onDifferentRecipe.
+    const last = useStore.getState().lastSearch;
+    if (last) {
+      useStore.getState().setLastSearch({
+        ...last,
+        recipes: last.recipes.map((r) => (r.id === recipe.id ? next : r)),
+      });
+    }
+    navigate(`/recipe/${next.id}`, { replace: true });
+    window.scrollTo({ top: 0, behavior: "auto" });
+    setVersionSheetOpen(false);
+  };
 
   // ---------- Feedback recovery flows ----------
   const onFeedbackSelect = async (reason: FeedbackReason) => {
@@ -440,6 +536,21 @@ export default function Recipe() {
             calories: { perServing: value, inferenceSource: "estimated" },
           });
           showToast(`Updated calories to ${value} kcal.`);
+        } catch (err) {
+          showToast(
+            err instanceof ApiError ? err.message : "Recompute failed.",
+          );
+        }
+        break;
+      }
+      case "protein-off": {
+        try {
+          const { value } = await api.recomputeField(recipe, "protein");
+          setRecipe({
+            ...recipe,
+            protein: { perServingGrams: value, inferenceSource: "estimated" },
+          });
+          showToast(`Updated protein to ${value}g.`);
         } catch (err) {
           showToast(
             err instanceof ApiError ? err.message : "Recompute failed.",
@@ -669,8 +780,29 @@ export default function Recipe() {
             className="lg:sticky lg:self-start lg:pt-6"
             style={{ top: topBarH }}
           >
-            {/* Identity block — plain white. Holds title, source, pills, pairs. */}
+            {/* Identity block — plain white. Holds hero image, title, source,
+                pills, pairs, version-stack link. */}
             <section>
+              {/* M4: hero image. Edge-to-edge on phone (within the same
+                  width caps as the text block), rounded on lg+ where it
+                  sits inside the sticky aside. aspect-video + object-cover
+                  reserves a predictable slot so the layout doesn't jump
+                  when the hotlink resolves; we accept a minor crop for
+                  layout stability. Hides entirely on hotlink failure
+                  (onError) or when the recipe has no imageUrl. */}
+              {recipe.source.imageUrl && !imageFailed && (
+                <div className="recipe-body-fade mx-auto mb-4 aspect-video w-full max-w-md overflow-hidden bg-paper-soft md:max-w-2xl lg:mb-6 lg:max-w-none lg:rounded-card">
+                  <img
+                    src={recipe.source.imageUrl}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={() => setImageFailed(true)}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+
               <div className="mx-auto max-w-md px-5 pt-4 pb-6 md:max-w-2xl md:px-8 lg:max-w-none lg:px-0 lg:pt-0 lg:pb-0">
                 {/* layoutId matches the Results card's title so Framer animates
                     the morph from card → page header when the user taps in.
@@ -719,18 +851,22 @@ export default function Recipe() {
                   </p>
                 )}
 
-                {/* Alternate-recipe affordance — shown when the recipe carries
-                    a previousVersion (set by onDifferentRecipe). The link opens
-                    the comparison view (built in M2). */}
-                {recipe.previousVersion && (
+                {/* M4: version-stack affordance — shown when the recipe
+                    carries any previousVersions (pushed onto by
+                    onDifferentRecipe). Tapping opens a list sheet of
+                    earlier versions; selecting one swaps to it. The
+                    side-by-side comparison view stays a V2 item. */}
+                {recipe.previousVersions && recipe.previousVersions.length > 0 && (
                   <p className="mt-4 text-caption text-ink-muted">
                     Alternate recipe ·{" "}
                     <button
                       type="button"
-                      onClick={onComparePrevious}
+                      onClick={() => setVersionSheetOpen(true)}
                       className="focus-ring text-ink-muted underline underline-offset-2 hover:text-ink"
                     >
-                      compare with previous recipe
+                      {recipe.previousVersions.length === 1
+                        ? "1 earlier version"
+                        : `${recipe.previousVersions.length} earlier versions`}
                     </button>
                   </p>
                 )}
@@ -738,6 +874,47 @@ export default function Recipe() {
                 </div>
               </div>
             </section>
+
+            {/* M4: video embed. Collapsed by default to keep the recipe
+                identity / steps as the first attention sink; the user opts
+                in by tapping "Watch the video ▾". Iframe inserts only
+                when expanded so we don't pay for an extra network request
+                until the user actually wants the video. Hidden entirely
+                when videoUrl is null or unrecognisable. */}
+            {(() => {
+              const embedUrl = recipe.videoUrl ? toEmbedUrl(recipe.videoUrl) : null;
+              if (!embedUrl) return null;
+              return (
+                <div className="recipe-body-fade mx-auto mt-2 max-w-md px-5 pb-4 md:max-w-2xl md:px-8 lg:max-w-none lg:px-0">
+                  <button
+                    type="button"
+                    onClick={() => setVideoOpen((v) => !v)}
+                    aria-expanded={videoOpen}
+                    className="focus-ring inline-flex items-center gap-2 rounded text-strong font-medium text-accent-strong"
+                  >
+                    <Play size={16} aria-hidden />
+                    <span>Watch the video</span>
+                    <ChevronDown
+                      size={16}
+                      aria-hidden
+                      className={`transition-transform duration-150 ${videoOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  {videoOpen && (
+                    <div className="mt-3 aspect-video w-full overflow-hidden rounded-card bg-paper-soft">
+                      <iframe
+                        src={embedUrl}
+                        title="Recipe video"
+                        loading="lazy"
+                        allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="h-full w-full"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Stats — 4×1 horizontal strip on phone/tablet (border-y only,
                 edge-to-edge); 2×2 grid on desktop with a full perimeter
@@ -752,8 +929,13 @@ export default function Recipe() {
                 <Metric icon={<Flame size={14} />} label="Cook">
                   {recipe.times.cookMinutes}m
                 </Metric>
-                <Metric icon={<Users size={14} />} label="Serves">
-                  {servings}
+                {/* M4: Protein replaces Serves here. The serving count
+                    still lives on the Ingredients tab adjuster, which is
+                    where the user actually changes it. */}
+                <Metric icon={<Dumbbell size={14} />} label="Protein">
+                  {recipe.protein
+                    ? `${Math.round(recipe.protein.perServingGrams)}g`
+                    : "—"}
                 </Metric>
                 <Metric icon={<Zap size={14} />} label="Cal">
                   {recipe.calories.perServing}K
@@ -881,6 +1063,21 @@ export default function Recipe() {
         open={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}
         onSelect={onFeedbackSelect}
+      />
+
+      {/* M4: version-stack sheet. Lists earlier versions of this recipe;
+          tapping one swaps the page to that version (current shifts into
+          the slot it left). Source site name folded into the label since
+          ActionSheet is single-line. */}
+      <ActionSheet
+        open={versionSheetOpen}
+        title="Earlier versions"
+        actions={(recipe.previousVersions ?? []).map((v) => ({
+          id: v.id,
+          label: `${v.title} · ${v.source.siteName}`,
+          onSelect: () => swapToPreviousVersion(v.id),
+        }))}
+        onClose={() => setVersionSheetOpen(false)}
       />
 
       {/* Loader overlay during the "Find alternate recipe" fetch. Covers

@@ -14,6 +14,7 @@ export type FeedbackReason =
   | "steps-dont-match"
   | "ingredients-wrong"
   | "calories-off"
+  | "protein-off"            // M4
   | "time-off"
   | "not-what-i-want";
 
@@ -26,6 +27,7 @@ const ROWS: Row[] = [
   { reason: "steps-dont-match", label: "Steps don't match this dish" },
   { reason: "ingredients-wrong", label: "Ingredients look wrong" },
   { reason: "calories-off", label: "Calorie count is off" },
+  { reason: "protein-off", label: "Protein looks wrong" },     // M4
   { reason: "time-off", label: "Time is way off" },
   { reason: "not-what-i-want", label: "Just not what I want" },
 ];

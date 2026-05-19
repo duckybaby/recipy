@@ -31,6 +31,7 @@ import {
   COOK_OPTIONS,
   CUISINE_OPTIONS,
   DIET_OPTIONS,
+  DISH_TYPE_OPTIONS,
   MAIN_OPTIONS,
   MEAL_OPTIONS,
   PREP_OPTIONS,
@@ -41,6 +42,7 @@ import type {
   CookMax,
   Cuisine,
   Diet,
+  DishType,
   MainIngredient,
   Meal,
   PrepMax,
@@ -271,6 +273,47 @@ export function EditChoicesSheet({
                     patch({ mainIngredients: next as MainIngredient[] })
                   }
                 />
+                <ChipGroup
+                  id="dish-type"
+                  label="Dish type"
+                  options={DISH_TYPE_OPTIONS}
+                  selected={filters.dishTypes ?? []}
+                  multi
+                  allowAdd
+                  onChange={(next) => patch({ dishTypes: next as DishType[] })}
+                />
+
+                {/* Has-video toggle (M4) — same control as Form. Bottom
+                    of the chip list since it's a yes/no preference, not
+                    a chip group. */}
+                <div className="flex items-center justify-between rounded-card border border-line bg-paper-soft px-4 py-3">
+                  <div className="min-w-0 flex-1 pr-4">
+                    <p className="text-strong font-medium text-ink">
+                      Only recipes with a video
+                    </p>
+                    <p className="mt-1 text-caption text-ink-muted">
+                      Prefers pages with an embedded video.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={filters.hasVideo ?? false}
+                    onClick={() =>
+                      patch({ hasVideo: !(filters.hasVideo ?? false) })
+                    }
+                    className={`focus-ring relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
+                      filters.hasVideo ? "bg-accent" : "bg-line"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`inline-block h-5 w-5 transform rounded-full bg-paper shadow-soft transition-transform ${
+                        filters.hasVideo ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
 
