@@ -58,10 +58,12 @@ Full stack table in [`docs/architecture.md`](docs/architecture.md).
 | M2.5 | Dark mode (Auto/Light/Dark) + closed Firestore rules + per-IP rate limiting + pinch-zoom | shipped |
 | M2.6 | Responsive layouts (Form / Results / Recipe at md/lg/xl) + CSP + prompt-injection guards | shipped |
 | M2.6.1 | HSTS + X-Frame-Options + CSP reporting + cache key normalisation | shipped |
-| M3 | Accounts (Google sign-in) + Preferences + Saved recipes + `recipy-list` library | next |
-| M4 | Cooking mode: offline + wake lock + multi-channel timer alert | |
-| M5 | Instamart Path B (heuristic cart deep-link) | |
-| M6 | Polish + acceptance criteria + custom domain hardening | |
+| M3 | Accounts (Google sign-in) + drawer + `recipy-list` library shipped; Preferences + Saved (rescoped — see M4) still pending | in progress |
+| M4 | Recipe richness: protein · hero image from source · video embed · "has video" filter · dish-type chip group · "lighter" + "high protein" vibe chips · `previousVersions` stack | next |
+| M3 (finish) | Preferences UI + Saved-with-modifications (rescoped to save base recipe + user modifications, not just a bookmark) | after M4 |
+| M5 | Cooking mode: offline + wake lock + multi-channel timer alert + mark-as-cooked | |
+| M6 | Instamart Path B (heuristic cart deep-link) | |
+| M7 | Polish + acceptance criteria + custom domain hardening | |
 
 Detail and commit refs in [`CHANGELOG.md`](CHANGELOG.md).
 

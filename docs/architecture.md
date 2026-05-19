@@ -36,7 +36,7 @@ Four React Router routes. Wrapped in `<AnimatePresence mode="wait">` so each nav
 | `/` | `routes/Form` | Filter chips. Filters live in the store, not the URL. |
 | `/results` | `routes/Results` | Streamed search results. No query params — intent travels via `location.state.intent`. |
 | `/recipe/:id` | `routes/Recipe` | Tabbed detail view. `:id` is the only param in v1. |
-| `/cook/:id` | `routes/Cooking` | M0 placeholder. M3 ships the real screen. |
+| `/cook/:id` | `routes/Cooking` | M0 placeholder. M5 ships the real screen. |
 
 Recipe's back arrow uses `navigate(-1)` so Results restores scroll naturally. Fallback to `navigate("/results")` when `location.key === "default"` catches the deep-link case where there's no prior entry.
 
@@ -76,7 +76,7 @@ These persist across reloads but don't drive renders frequently enough to warran
 
 | Key | Owner | Shape | Notes |
 |---|---|---|---|
-| `recipe-app:cooking-state` | Cooking | `CookingState` | M3. Expires after 7 days. |
+| `recipe-app:cooking-state` | Cooking | `CookingState` | M5. Expires after 7 days. |
 | `recipe-app:recent-recipes` | Recipe page | `Recipe[]` | Capped at 10, most recent first. |
 | `recipe-app:notifications-prompt` | Cooking | `NotificationsPrompt` | One-time prompt suppression. |
 | `recipe-app:dismissed-makeahead` | Recipe page | `string[]` | Recipe IDs the user dismissed. |

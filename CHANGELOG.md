@@ -2,6 +2,34 @@
 
 Ship log keyed by milestone. Commits referenced where useful. Most recent at the top.
 
+## M4 — Recipe richness (May 2026)
+
+Driven by real user feedback. People wanted more information on the recipe page (image, video, protein over calories) and finer filters at the dish-shape level (smoothie / salad / soup) and the health-intent level (lighter / high-protein). M4 is purely additive — pre-M4 cached recipes parse fine and just lack the new fields.
+
+### Schema
+
+- **Protein** — `Recipe.protein` (`{ perServingGrams, inferenceSource }` or `null`) on both backend zod (`functions/src/validation.ts`) and frontend types. Prompt updated to estimate grams per serving from the ingredient list. Recovery sheet gains a "Protein looks wrong?" reason that hits `/api/recompute-field` with `field: "protein"`.
+- **Hero image** — `source.imageUrl` was `null` in v1 by prompt instruction; M4 wires Anthropic to populate it from the source page. Recipe page renders it at the top of the identity block, `aspect-video object-cover` to keep the layout stable.
+- **Video embed** — new `Recipe.videoUrl` field. Anthropic returns the YouTube / Vimeo URL the source page embeds (no off-page YouTube searches). Recipe page renders a collapsed "Watch the video ▾" toggle below the identity. Defensive `toEmbedUrl` helper normalises watch / share URLs to embeddable form.
+- **Dish type** — new `Recipe.dishType: string[]` field and `SearchFilters.dishTypes` filter. 15 presets (Curry · Stir-fry · Soup · Salad · Smoothie · Bowl · Sandwich · Wrap · Pasta · Casserole · Bake · Roast · Grill · Pizza · Pancake/Dosa) plus custom chips. Form gains a new chip group; EditChoicesSheet mirrors it.
+- **Has-video filter** — new `SearchFilters.hasVideo` boolean. Yes/no toggle on Form (below the chip groups) and on EditChoicesSheet. Soft hint to the prompt — doesn't strictly exclude videoless results.
+- **"Lighter" and "High protein" vibe chips** — two new presets in the existing Vibe group. Prompt translates them to descriptive phrases ("lighter (lower-calorie, smaller-portion approach)" and "high protein (aim for at least 25 g per serving)") rather than dropping them in as bare vibes.
+- **Version stack** — `Recipe.previousVersion` (single) → `Recipe.previousVersions: Recipe[]` (capped at 3). Each "Find different recipe" tap pushes onto the stack. Recipe page shows "Alternate recipe · N earlier versions" link; tapping opens a list sheet that swaps to any version. Side-by-side compare view stays V2.
+
+### UI
+
+- **Stats row** changes from Prep · Cook · Serves · Cal to **Prep · Cook · Protein · Cal**. Serves count remains on the Ingredients tab adjuster, which is where the user actually changes it. Protein shows "—" when the field is null (pre-M4 data).
+- **Card meta** on Results gains a protein segment between time and calories. Cards with `videoUrl` get a small play-icon badge in the top-right corner.
+- **CSP** — `img-src` broadened to `https:` so any source-domain image works (privacy / cookie risk is low for image hotlinks and we don't follow redirects). `frame-src` adds YouTube + Vimeo embed domains.
+
+### Migration
+
+- Zustand persist version bumped 2 → 3. Migration walks `lastSearch.recipes` and `activeRecipe.recipe`, converts any surviving `previousVersion` (singular) to a 1-entry `previousVersions` array, and backfills the two new SearchFilters fields. Theme + everything else preserved.
+
+### Milestone renumber
+
+M4 (was Cooking) → **M5**. M5 (was Instamart) → **M6**. M6 (was Polish) → **M7**. Remaining M3 phases (Preferences UI + Saved-with-modifications) are pending after M4; the rescoped Saved design (`baseRecipeId` + `modifications` block instead of a heart-bookmark) lives in spec §3.9.
+
 ## M2.6.1 — Security headers follow-up (May 2026)
 
 Small follow-up after the M2.6 security audit. Four items: one real gap, three defence-in-depth.

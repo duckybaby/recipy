@@ -18,7 +18,7 @@ Rules that beat any other instinct. If a later section seems to contradict one o
 4. **Round numbers always.** Anything displayed (servings, calories, times, prices) rounds for human reading. No `0.30000000000000004` artifacts.
 5. **Single account, hard-gated.** v1 requires Google sign-in (M3). Persistent session via Firebase Auth's default `browserLocalPersistence` — once she signs in, she stays signed in across reboots, browser updates, and schema migrations. Local persistence (active recipe, cooking progress, recent recipes, filter selections) survives tab kills, browser closes, refreshes, and OS-level memory pressure. Account-level data (preferences, saved recipes, custom chips) syncs to Firestore so it follows the user across devices. See [`architecture.md`](./architecture.md) for the state model and the three-database split.
 6. **The recipe is found, not invented.** Every recipe originates from a real recipe website, fetched by Claude via web search, and links back with attribution. Hallucinated URLs are unacceptable.
-7. **Cooking mode is offline-capable.** Once she enters cooking mode, the recipe lives in localStorage. She can lose internet, swap to YouTube, take a call, even reboot — the steps and timer still work when she returns. (M4 scope.)
+7. **Cooking mode is offline-capable.** Once she enters cooking mode, the recipe lives in localStorage. She can lose internet, swap to YouTube, take a call, even reboot — the steps and timer still work when she returns. (M5 scope — renumbered from M4 after the recipe-richness milestone was inserted; see §3.9.)
 
 ---
 
@@ -39,7 +39,7 @@ Splash gates everything — see §3.5. Past the gate, the linear cook-flow is Fo
 
 The Recipe page exposes lateral actions: **More like this** (push to Results with a `similarTo` bias), **Find different recipe** (alternate source for the same dish, swapped in place), inline **Substitutions**, **Save** (heart button — M3), and a kebab-only **Something looks wrong?** sheet.
 
-**Resume flow** (M4): when the app loads, it checks for an in-progress cook in localStorage. If one exists and is less than 7 days old, a banner renders at the top of whatever screen is loading: "Resume your tomato rasam? Step 4 of 9 · [Resume] [Start fresh]". The banner does not block — she can ignore it and use the form normally. Tapping Resume goes straight to cooking mode at the right step.
+**Resume flow** (M5): when the app loads, it checks for an in-progress cook in localStorage. If one exists and is less than 7 days old, a banner renders at the top of whatever screen is loading: "Resume your tomato rasam? Step 4 of 9 · [Resume] [Start fresh]". The banner does not block — she can ignore it and use the form normally. Tapping Resume goes straight to cooking mode at the right step.
 
 ---
 
@@ -58,10 +58,13 @@ The home screen. A single column of chip groups. Multi-select within most groups
 | Diet | yes | Vegetarian · Non-veg · Eggless · Vegan · Jain | yes |
 | Prep time | single | Under 5 min · Under 15 min · Under 30 min · No limit | no |
 | Cook time | single | Under 15 min · Under 30 min · Under 60 min · No limit | no |
-| Vibe | yes | Comforting · Light · Spicy · One-pot · Healthy · Indulgent · Impressive | yes |
+| Vibe | yes | Comforting · Light · Lighter · High protein · Spicy · One-pot · Healthy · Indulgent · Impressive | yes |
 | Main ingredient | yes | Chicken · Paneer · Fish · Eggs · Vegetables · Pasta · Rice · Lentils · Tofu | yes |
+| Dish type *(M4)* | yes | Curry · Stir-fry · Soup · Salad · Smoothie · Bowl · Sandwich · Wrap · Pasta · Casserole · Bake · Roast · Grill · Pizza · Pancake/Dosa | yes |
 
 **No group is required.** She can submit with nothing selected; the form treats that as "anything goes."
+
+**Has video toggle (M4).** Below the chip groups, above the Find recipes CTA, a single yes/no toggle: "Only recipes with a video." Off by default. When on, adds a soft prompt hint preferring recipes from pages with an embedded video — doesn't strictly exclude videoless results if the other filters can't be honoured otherwise.
 
 **Custom chips** persist per-group in localStorage (`recipe-app:custom-chips`). Tapping the `+` affordance opens a single text field that closes on submit. Stored lower-cased and trimmed.
 
@@ -92,9 +95,10 @@ Vertically scrolling list of three (M1 settled on 3 after cost analysis — 5 wa
 **Card structure (stripped on purpose):**
 
 1. **Title** — full size, `text-title` typography. The card is essentially a typographic block.
-2. **Meta line** — `{prep}m prep · {cook}m cook · {kcal} kcal`.
+2. **Meta line** — `{prep}m prep · {cook}m cook · {protein}g protein · {kcal} kcal` *(M4: protein joins the meta line; pre-M4 cached recipes lacking protein just hide that segment)*.
+3. **Video badge** *(M4)* — small play-icon pill in the top-right of the card when `videoUrl` is populated, regardless of whether the "has video" Form toggle was on. Visually distinct enough to scan, subtle enough not to dominate the card.
 
-No image, no pills, no availability state on the card itself. Images were dropped in M1 because (a) source pages don't always have hero images, (b) loading them was the slowest part of the cards, and (c) the typographic morph to the Recipe page H1 only has to translate, not scale, when the card is just text.
+No image on the card itself. Hero images were dropped in M1 because (a) source pages don't always have hero images, (b) loading them was the slowest part of the cards, and (c) the typographic morph to the Recipe page H1 only has to translate, not scale, when the card is just text. M4 ships images on the **Recipe page** but keeps the cards typographic so the morph stays cheap.
 
 The card title carries a `layoutId` matching the Recipe page's H1, so Framer Motion animates the title from card position to header position when the user taps in. POP-driven mounts (back from Recipe) drop the `layoutId` so Framer doesn't fight the slide-off-right exit.
 
@@ -121,12 +125,14 @@ The most-changed screen during M2 polish. Long, scrollable, tab-organised.
 **Section order, top to bottom:**
 
 1. **Top bar (sticky, frosted, single blur region).** Back arrow · empty centre · Share icon · kebab (More actions). When the in-page H1 scrolls out of view, a compact title fades into the centre. When the in-page tab strip scrolls under the bar, a second copy of the tab strip fades in inside the bar (same blur, no seam).
-2. **Identity block (paper background).** Big H1 (the dish title), source attribution line ("Source: archanaskitchen.com" — opens in new tab), two pill rows (difficulty + diet flags), pairs-well-with line if applicable, "Alternate recipe · compare with previous recipe" link if a previousVersion exists (M2-only UI; the comparison view itself is M4).
-3. **Stats row** — four equal cells with hairline borders top + bottom and vertical dividers: Prep · Cook · Serves · kcal. The Serves cell mirrors the servings adjuster on the Ingredients tab.
-4. **Make-ahead nudge** — yellow card with the make-ahead text, shown only if `recipe.makeAhead` is non-null and the user hasn't dismissed it. "I've done this · dismiss" closes it for the session (persisted to `recipe-app:dismissed-makeahead`).
-5. **Tab strip (in-flow).** Recipe · Equipment · Ingredients. Active tab gets a tinted background; the strip has a continuous hairline underline through all three.
-6. **Tab content.** Slides directionally based on tab order (Recipe → Equipment slides one way, Ingredients → Recipe the other). The content area has `min-h-[100dvh]` so switching to a short tab doesn't collapse the page and bounce the scroll position. `overflow-x-hidden` clips the slide-out animation.
-7. **Sticky bottom CTA.** Full pill when scrolling up; shrinks to a circular ChefHat FAB when scrolling down past 200 px (collapses on 40 px+ of downward delta, expands on 30 % of viewport height of upward delta). Anchored above iOS home indicator.
+2. **Hero image *(M4)*.** `source.imageUrl` from the recipe page, hotlinked directly. Full-width on phone / tablet, sits at the top of the left aside on lg+. Intrinsic aspect (no forced crop). Paper-soft placeholder of the same aspect while loading; same placeholder stays if the hotlink fails (no broken-image icon). Pre-M4 recipes with `imageUrl: null` hide the slot entirely.
+3. **Identity block (paper background).** Big H1 (the dish title), source attribution line ("Source: archanaskitchen.com" — opens in new tab), two pill rows (difficulty + diet flags), pairs-well-with line if applicable, "Alternate recipe · N earlier versions" link if `previousVersions` is non-empty *(M4: list sheet on tap; pre-M4 data with a single `previousVersion` migrates transparently to a 1-entry stack)*. The side-by-side comparison view stays V2.
+4. **Video embed *(M4)*.** Collapsed by default — "Watch the video ▾" toggle, expands to a 16:9 iframe of `videoUrl` (YouTube / Vimeo embed). Hidden entirely if `videoUrl: null`. Placement is below the identity block, above the stats row, so the user sees the recipe identity first and the video is opt-in.
+5. **Stats row** — four equal cells with hairline borders top + bottom and vertical dividers: **Prep · Cook · Protein · kcal** *(M4: protein replaced Serves; Serves moved fully to the Ingredients tab adjuster, which always showed it anyway)*. Pre-M4 recipes with `protein: null` show "—" in the protein cell.
+6. **Make-ahead nudge** — yellow card with the make-ahead text, shown only if `recipe.makeAhead` is non-null and the user hasn't dismissed it. "I've done this · dismiss" closes it for the session (persisted to `recipe-app:dismissed-makeahead`).
+7. **Tab strip (in-flow).** Recipe · Equipment · Ingredients. Active tab gets a tinted background; the strip has a continuous hairline underline through all three.
+8. **Tab content.** Slides directionally based on tab order (Recipe → Equipment slides one way, Ingredients → Recipe the other). The content area has `min-h-[100dvh]` so switching to a short tab doesn't collapse the page and bounce the scroll position. `overflow-x-hidden` clips the slide-out animation.
+9. **Sticky bottom CTA.** Full pill when scrolling up; shrinks to a circular ChefHat FAB when scrolling down past 200 px (collapses on 40 px+ of downward delta, expands on 30 % of viewport height of upward delta). Anchored above iOS home indicator.
 
 **Tabs:**
 
@@ -142,7 +148,7 @@ The most-changed screen during M2 polish. Long, scrollable, tab-organised.
 | Any | Not yet checked | White tinted-accent: "Check Instamart" with cart icon |
 | Any | Just ran the check | White tinted-accent: "Add to cart" with cart icon |
 
-Tapping `Check Instamart` runs the heuristic classification (every ingredient already carries `instamart.classification` from the initial API response) and jumps the user to the Ingredients tab so they see the result panel. Tapping `Add to cart` opens Instamart in a new tab with the items pre-queued at Royal Legend (M5).
+Tapping `Check Instamart` runs the heuristic classification (every ingredient already carries `instamart.classification` from the initial API response) and jumps the user to the Ingredients tab so they see the result panel. Tapping `Add to cart` opens Instamart in a new tab with the items pre-queued at Royal Legend (M6 — renumbered from M5 after the recipe-richness milestone was inserted).
 
 **Kebab menu (More actions):**
 
@@ -151,9 +157,9 @@ Tapping `Check Instamart` runs the heuristic classification (every ingredient al
 
 The "Find different recipe" action is no longer in the kebab — it's an inline link inside the Recipe tab next to the source attribution. Found surprise-easier there during M2 testing.
 
-### 3.4 Cooking mode — M4 placeholder
+### 3.4 Cooking mode — M5 placeholder
 
-The current `Cooking.tsx` is a stub. M4 ships the real screen. The design intent below stands.
+The current `Cooking.tsx` is a stub. M5 ships the real screen *(renumbered from M4 after the M4 recipe-richness milestone was inserted; see §3.9)*. The design intent below stands.
 
 **Layout:**
 
@@ -290,19 +296,19 @@ users/{uid}.preferences: {
 
 ### 3.8 Saved recipes + the `recipy-list` library — M3
 
-Two surfaces plus the backend library.
+Two surfaces plus the backend library. *(M4 reframes the "Saved" surface from "bookmark the source recipe" to "save the recipe **plus my modifications**" — see §3.9. The shape below describes the simpler M3 phase 5 design; the rescoped M4-and-later version lives in §3.9 under "Re-scoped M3 phase 5 (Saved)".)*
 
 **Heart button** on the Recipe page (top-right of the top bar, next to the kebab):
 
 - Outlined heart when not saved. Filled heart (accent colour) when saved.
-- Tap: writes `users/{uid}/saved/{recipeId}` with denormalised fields (`title`, `siteName`, `savedAt`) so the list view doesn't need to fetch each full recipe.
+- Tap: writes `users/{uid}/saved/{savedId}` with `baseRecipeId` + denormalised fields (`baseTitle`, `baseSiteName`, `savedAt`) + an empty `modifications` block (substitutions / servings / note all null on first save). The list view doesn't need to fetch each full recipe.
 - Tap-again unsaves — deletes the doc. The underlying `recipy-list` document stays (other users may have saved it).
 
 **Saved route** at `/saved`:
 
 - Reverse-chronological list of the user's saved recipes (most recent first).
-- Each row: title (`text-card-title`), site name, saved date (relative — "saved Tuesday", "saved 3 weeks ago").
-- Tap a row → opens the recipe at `/recipe/:id`. The page first checks the Zustand store (in case of recent activity); if not found, reads from `recipy-list/recipes/{id}`.
+- Each row: title (`text-card-title`), site name, saved date (relative — "saved Tuesday", "saved 3 weeks ago"), and a small "modified" badge if `modifications` is non-empty.
+- Tap a row → opens the recipe at `/recipe/:savedId` *(saved-recipe route, separate from the source `/recipe/:id`)*. The page resolves `baseRecipeId` from `recipy-list`, then replays `modifications` onto the rendered view.
 - Empty state: "Nothing saved yet. Tap the heart on any recipe."
 - Pull-to-refresh re-queries Firestore.
 
@@ -327,6 +333,53 @@ Document shape mirrors the `Recipe` type plus:
 
 Once `recipy-list` has a meaningful corpus (a few hundred recipes across common filter combinations), the search path can prefer library hits over Anthropic calls. Spec §7.2 will gain a third cache layer between `recipy-cache` (filter-keyed) and Anthropic (fresh fetch): `recipy-list` query by tags. Not in M3 scope — deferred. M3 only writes the library; reading from it for search comes later.
 
+### 3.9 Recipe richness — M4
+
+A focused milestone driven by real user feedback: people want more information on the recipe page (image, video, protein), and they want to filter recipes by *dish shape* (smoothie, salad, soup) and *health intent* (lighter, high-protein) — not just by meal / cuisine / vibe. M4 also expands the alternate-recipe history from one level to a stack so the user can step back through more than one swap. Everything here is additive and non-breaking; pre-M4 library and cache entries just lack the new fields (treated as `null`).
+
+**Scope:**
+
+1. **Protein per serving.** New `protein` field on `Recipe`. Anthropic populates from the source page where possible, estimates otherwise (same `inferenceSource: "page" | "estimated"` pattern as `calories`). Stats row on the Recipe page becomes **Prep · Cook · Protein · kcal** (drops the `Serves` cell — that lives on the Ingredients tab adjuster already). The Recovery flow gains a "Protein looks wrong?" reason that calls `/api/recompute-field` with `field: "protein"`.
+2. **Hero image from source.** The Recipe schema already has `source.imageUrl: string | null` (added in v1 but never displayed). M4 wires Anthropic to populate it from the recipe page's hero image and renders it at the top of the Recipe page identity block — full-width on phone / tablet, in the left aside on lg+. Aspect ratio is intrinsic to the image (no forced crop); a paper-soft placeholder of the same aspect renders while loading or if the hotlink fails. Sourced images are hotlinked directly from the recipe site (no proxy / cache). CSP `img-src` broadens to `https:` so any source domain works — privacy / cookie risk is low for an image hotlink and we don't follow redirects.
+3. **Recipe video embed.** New `videoUrl: string | null` field on `Recipe`. Anthropic returns the URL of an embedded YouTube / Vimeo on the source page when one exists. If present, the Recipe page renders the video as a 16:9 embed below the identity block and above the tab strip (collapsed by default — "Watch the video ▾" toggle so it doesn't fight the recipe steps for first attention). Don't generate a YouTube search to fake a video — if the source page doesn't have one, no embed.
+4. **Dish-type filter.** New chip group on Form between *Main ingredient* and *Vibe*: **Dish type** (multi-select, add-own). Presets: Curry · Stir-fry · Soup · Salad · Smoothie · Bowl · Sandwich · Wrap · Pasta · Casserole · Bake · Roast · Grill · Pizza · Pancake/Dosa. Maps to a new `dishTypes: DishType[]` field on `SearchFilters` and a hint in the prompt.
+5. **Health-intent vibe chips.** Two new presets in the existing Vibe group: **Lighter** and **High protein**. No new schema — they're just additions to the vibe presets array. The prompt translates them: "lighter" biases toward lower-calorie / smaller-portion recipes; "high protein" biases toward ≥25 g protein per serving.
+6. **"Has video" Form filter.** A single toggle (not a chip — it's a yes/no, doesn't belong in the chip groups). Renders below the chip groups, above the Find recipes CTA. When on, the prompt adds a soft constraint: "prefer recipes from pages with an embedded video." Soft, not hard — if Anthropic can't honour it with the other filters, it still returns recipes. The Results page shows a small play-icon badge on cards where `videoUrl` is populated, regardless of whether the toggle was on.
+7. **Version stack (was one level).** `Recipe.previousVersions` becomes an array (was a single optional `previousVersion`). Each "Find different recipe" tap pushes the current version onto the stack of the new version. Cap at 3 entries — beyond that, drop the oldest. The Recipe page's "Alternate recipe · compare with previous" link becomes "Alternate recipe · N earlier versions" with a sheet that lists all of them; tapping one swaps the displayed recipe to that version (without losing the others — the swap is just a pointer move). M4 ships the data structure + list sheet; the side-by-side compare view stays a V2 item.
+
+**Out of scope for M4 (explicitly):**
+
+- Personalised "how to make this better for me" tips. Requires populated user preferences (M5 work, which is the rescoped M3 phase 4 / 5 below) and adds a per-recipe-view Anthropic call. Deferred to V2 after preferences are populated and we can gate by a cost flag.
+- User-uploaded photos of cooked dishes. Crosses the line from recipe finder into recipe journal — different product surface, Firebase Storage cost, content moderation if multi-user. Not in scope.
+
+**Re-scoped M3 phase 5 (Saved) lands AFTER M4:**
+
+Once M4 ships the richer Recipe schema, M3 phase 5 (Saved) reframes from "heart-toggle that bookmarks the source recipe" to "save the recipe **plus my modifications**." The saved record stores:
+
+```ts
+users/{uid}/saved/{savedId}: {
+  baseRecipeId: string;              // recipy-list/recipes/{id}
+  baseTitle: string;                 // denormalised for list rendering
+  baseSiteName: string;
+  savedAt: Timestamp;
+  modifications: {
+    substitutions: Record<string, string>;   // { paneer: "tofu" }
+    servings: number | null;                 // override base
+    note: string | null;                     // user's personal note, free text
+  };
+}
+```
+
+When the user opens a saved recipe, the page resolves `baseRecipeId` from `recipy-list`, then replays `modifications` onto the rendered view (substitutions apply via `applySubstitutions`, servings overrides the base, note shows in the identity block). Unsaving deletes the saved doc; the underlying library doc stays. Editing modifications on a saved recipe writes back to the same `savedId`.
+
+**Milestone ordering after M4:**
+
+- M4 (this section): Recipe richness — ship first.
+- M3 phase 4 + 5 (Preferences + Saved-with-modifications): finish the M3 user-data work. Saved uses the richer schema from M4.
+- M5 (was M4): Cooking mode + mark-as-cooked entry to the `/users/{uid}/cooks` subcollection.
+- M6 (was M5): Instamart Path B.
+- M7 (was M6): Polish + acceptance.
+
 ---
 
 ## 4. Recovery flows
@@ -338,12 +391,13 @@ The "Something looks wrong?" sheet is a bottom-sheet modal with five preset rows
 | Steps don't match this dish | Calls `/api/find-alternate-source` to refetch the dish from a different URL. Swaps the recipe in place. |
 | Ingredients look wrong | Same as above. |
 | Calorie count is off | Calls `/api/recompute-field` with `field: "calories"`. Updates the kcal cell in place; shows a toast. |
+| Protein looks wrong *(M4)* | Calls `/api/recompute-field` with `field: "protein"`. Updates the protein cell in place. |
 | Time is way off | Calls `/api/recompute-field` with `field: "time"`. Re-splits the new total proportionally into prep + cook. |
 | Just not what I want | Returns to Results so she can pick a different card. No fetch — uses the cached batch. |
 
 All five also fire a fire-and-forget `/api/feedback` event for the M6 source quality signal.
 
-The inline **Find different recipe** link on the Recipe tab is the same flow as the first two reasons, fired explicitly rather than via the kebab. Calls `/api/find-alternate-source` excluding the current URL, holds onto the prior recipe as `previousVersion` (cap of one level deep), and replaces the slot in `lastSearch.recipes` so back nav reflects the swap.
+The inline **Find different recipe** link on the Recipe tab is the same flow as the first two reasons, fired explicitly rather than via the kebab. Calls `/api/find-alternate-source` excluding the current URL, pushes the prior recipe onto the `previousVersions` stack on the new recipe *(M4: cap of 3 entries; pre-M4 single-level data migrates as a 1-entry stack)*, and replaces the slot in `lastSearch.recipes` so back nav reflects the swap.
 
 ---
 
@@ -426,11 +480,16 @@ type Recipe = {
   source: {
     url: string;
     siteName: string;                       // "archanaskitchen.com"
-    imageUrl: string | null;                // null in v1 (frontend doesn't display)
+    imageUrl: string | null;                // M4: rendered as hero on Recipe page
+                                            //     when non-null (was null-and-hidden in v1)
     fetchedAt: string;                      // ISO
   };
   title: string;
   tagline: string;                          // one sentence, max 12 words
+  videoUrl: string | null;                  // M4: YouTube / Vimeo embed URL if the
+                                            //     source page has one
+  dishType: DishType[] | null;              // M4: ["smoothie"], ["bowl"], etc.
+                                            //     null on pre-M4 cached / library docs
   servings: { base: number; current: number };
   times: { prepMinutes: number; cookMinutes: number; totalMinutes: number };
   difficulty: {
@@ -441,6 +500,10 @@ type Recipe = {
          | "advanced";
   };
   calories: { perServing: number; inferenceSource: "page" | "estimated" };
+  protein: {                                // M4: grams per serving
+    perServingGrams: number;
+    inferenceSource: "page" | "estimated";
+  } | null;                                 // null on pre-M4 cached / library docs
   equipment: string[];                      // only NON-baseline items
   makeAhead: string | null;
   dietFlags: string[];                      // ["contains dairy", "vegetarian"]
@@ -448,9 +511,16 @@ type Recipe = {
   whyPicked: string[];                      // ["30m", "comforting", "vegetarian"] — short tags
   ingredients: Ingredient[];
   steps: Step[];
-  previousVersion?: Recipe;                 // client-side only; set by Find alternate
-                                            // capped at one level deep
+  previousVersions?: Recipe[];              // M4: stack, capped at 3 entries (was a
+                                            //     single optional `previousVersion`
+                                            //     pre-M4 — migrates as a 1-entry stack)
 };
+
+type DishType =
+  | "curry" | "stir-fry" | "soup" | "salad" | "smoothie" | "bowl"
+  | "sandwich" | "wrap" | "pasta" | "casserole" | "bake" | "roast"
+  | "grill" | "pizza" | "pancake-dosa"
+  | string;                                 // custom user-added dish types
 
 type Ingredient = {
   name: string;
@@ -520,7 +590,7 @@ V1 ships through M2.6.1 with device-local persistence and the auth/account layer
 - Service-worker offline cache for the app shell (broader than M4's `localStorage`-only offline cooking).
 - Source quality signal — Claude tags trusted sources, learned from v1's feedback stream.
 - Regional variation toggle — same dish, different regional style.
-- Recipe comparison view — uses the `previousVersion` data v1 is already collecting.
+- Side-by-side recipe comparison view — M4 ships the `previousVersions` stack and a list-sheet for jumping between them; the actual side-by-side comparison UI stays V2.
 - Multi-user / sharing: invite household members to share saved recipes + history.
 
 ---
@@ -554,7 +624,7 @@ Two paths. Path B (heuristic) ships in v1 because the MCP server's auth model is
 
 **Path A (preferred, when authentication is resolved):** the Cloud Function calls Anthropic with the Instamart MCP server attached via `mcp_servers`, scoped to the Royal Legend address. The model uses Instamart tools to check availability per ingredient and add to cart.
 
-**Path B (fallback, v1):** the search prompt already instructs Claude to classify each ingredient as `pantry-staple` / `likely-available` / `specialty` based on commonness in Indian kirana + supermarket retail. The Ingredients tab uses these classifications to drive the Check Instamart panel. The Add-to-cart CTA opens a search URL on instamart.com prefilled with the items rather than auto-adding to cart (M5).
+**Path B (fallback, v1):** the search prompt already instructs Claude to classify each ingredient as `pantry-staple` / `likely-available` / `specialty` based on commonness in Indian kirana + supermarket retail. The Ingredients tab uses these classifications to drive the Check Instamart panel. The Add-to-cart CTA opens a search URL on instamart.com prefilled with the items rather than auto-adding to cart (M6 — renumbered from M5 after the recipe-richness milestone was inserted).
 
 The frontend never branches on which path is active — both return the same response shape from `/api/check-instamart` and `/api/add-to-instamart`. The backend has an `INSTAMART_MODE` env var (`"mcp" | "heuristic"`); ship in `heuristic`, flip to `mcp` once auth is sorted (post-v1).
 
@@ -585,7 +655,7 @@ The build is done when every one of these is true in production:
 11. Tapping a card opens the Recipe page with every section from §3.3 rendered (or correctly omitted per the rules).
 12. Source attribution opens the original recipe URL in a new tab.
 13. **Find alternate recipe** swaps the page content with a new recipe from a different source. URL rewrites to the new id. Back to Results shows the alternate in the card.
-14. The alternate carries a "compare with previous recipe" link (M2-only UI; comparison view itself is M4).
+14. The alternate carries an "Alternate recipe · N earlier versions" link that opens a list sheet (M4: list sheet ships; side-by-side comparison view stays V2).
 15. Tab switches slide directionally and never collapse the page or bounce scroll.
 16. Sticky CTA shrinks to a ChefHat FAB on scroll-down past 200 px and expands back on 30% viewport-height of scroll-up.
 17. Servings adjuster scales ingredient quantities live. Calories and times do not change.
@@ -611,7 +681,18 @@ The build is done when every one of these is true in production:
 34. **Firestore rules enforce ownership.** Attempt to read `users/<other-uid>/saved` from your own account in DevTools console. Result: `permission-denied`.
 35. **Offline read.** Sign in once. Go offline. Reload the app. Splash skips (cached auth), saved recipes list renders from Firestore's offline cache.
 
-### Cooking (M4)
+### Recipe richness (M4)
+
+36a. **Protein per serving renders in the stats row.** New recipes show "{N}g" in the third stats cell. Pre-M4 cached recipes show "—" in the same cell.
+36b. **Hero image renders at the top of the Recipe page** for recipes with a non-null `source.imageUrl`. A paper-soft placeholder fills the slot during load and persists if the hotlink fails. Recipes with `imageUrl: null` hide the slot entirely.
+36c. **Video embed renders below the identity block** when `videoUrl` is set. Collapsed-by-default with a "Watch the video ▾" toggle. Hidden entirely when `videoUrl: null`.
+36d. **Dish-type filter on Form** is a new multi-select chip group with the M4 presets, custom chips supported. Selections survive back-from-Results and bias the search.
+36e. **"Lighter" and "High protein" chips** appear in the Vibe group. Selecting them biases search responses accordingly (verify in Cloud Run logs for the prompt addition).
+36f. **"Has video" toggle on Form** is a yes/no control below the chip groups. When on, results lean toward recipes with videoUrl populated.
+36g. **Results cards show a play-icon badge** when the recipe has a videoUrl, independent of the Form toggle state.
+36h. **`previousVersions` is a stack.** Finding alternate recipes 3 times in a row produces a list of 3 prior versions accessible via the "N earlier versions" link. The 4th alternate drops the oldest. The list sheet lets the user jump back to any of them.
+
+### Cooking (M5)
 
 36. Start cooking enters cooking mode. The screen does not sleep while open (verify on a real phone).
 37. **Wake lock recovers after backgrounding.** Switch to YouTube for ≥30 s, return. Screen stays awake again.
