@@ -47,6 +47,8 @@ export function summarizeFilters(filters: SearchFilters): string {
   if (filters.vibes.length) parts.push(...filters.vibes.map(prettify));
   if (filters.mainIngredients.length)
     parts.push(...filters.mainIngredients.map(prettify));
+  if (filters.dishTypes?.length)
+    parts.push(...filters.dishTypes.map(prettify));
 
   if (parts.length === 0) return "Anything goes";
   return parts.join(" · ");
