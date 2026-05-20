@@ -13,6 +13,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Check } from "lucide-react";
 import { ChipGroup } from "../components/ChipGroup";
 import { HamburgerButton } from "../components/HamburgerButton";
 import { TopBar } from "../components/TopBar";
@@ -138,21 +139,36 @@ export default function Form() {
               flip it without scrolling back up to the title row. */}
           <div
             aria-hidden={!ctaInBar}
-            className={`ml-auto hidden items-center gap-5 transition-opacity duration-200 md:flex ${
+            className={`ml-auto hidden items-center gap-10 transition-opacity duration-200 md:flex ${
               ctaInBar ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
           >
-            <label className="inline-flex cursor-pointer items-center gap-3 text-caption text-ink-muted">
-              <input
-                type="checkbox"
-                checked={filters.hasVideo ?? false}
-                onChange={(e) => update({ hasVideo: e.target.checked })}
-                tabIndex={ctaInBar ? 0 : -1}
-                style={{ accentColor: "var(--color-accent)" }}
-                className="h-5 w-5 cursor-pointer"
-              />
-              <span>Only with video</span>
-            </label>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={filters.hasVideo ?? false}
+              onClick={() => update({ hasVideo: !(filters.hasVideo ?? false) })}
+              tabIndex={ctaInBar ? 0 : -1}
+              className="focus-ring inline-flex min-h-10 items-center justify-between gap-3 rounded-button border border-line bg-paper-soft px-4 transition-colors hover:border-ink-faint"
+            >
+              <span
+                className={`text-caption font-medium transition-colors ${
+                  filters.hasVideo ? "text-accent-strong" : "text-ink"
+                }`}
+              >
+                Recipes must contain video
+              </span>
+              <span
+                aria-hidden
+                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                  filters.hasVideo
+                    ? "border-accent bg-accent text-on-accent"
+                    : "border-line bg-paper"
+                }`}
+              >
+                {filters.hasVideo && <Check size={12} strokeWidth={3} />}
+              </span>
+            </button>
             <button
               type="button"
               onClick={findRecipes}
@@ -189,17 +205,32 @@ export default function Form() {
                 carries inPageCtaRef so its visibility drives the
                 bar fade-in above (the bar version of this same
                 cluster fades in alongside it). */}
-            <div className="hidden shrink-0 md:ml-auto md:flex md:items-center md:gap-5">
-              <label className="inline-flex cursor-pointer items-center gap-3 text-caption text-ink-muted">
-                <input
-                  type="checkbox"
-                  checked={filters.hasVideo ?? false}
-                  onChange={(e) => update({ hasVideo: e.target.checked })}
-                  style={{ accentColor: "var(--color-accent)" }}
-                  className="h-5 w-5 cursor-pointer"
-                />
-                <span>Only with video</span>
-              </label>
+            <div className="hidden shrink-0 md:ml-auto md:flex md:items-center md:gap-10">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={filters.hasVideo ?? false}
+                onClick={() => update({ hasVideo: !(filters.hasVideo ?? false) })}
+                className="focus-ring inline-flex min-h-10 items-center justify-between gap-3 rounded-button border border-line bg-paper-soft px-4 transition-colors hover:border-ink-faint"
+              >
+                <span
+                  className={`text-caption font-medium transition-colors ${
+                    filters.hasVideo ? "text-accent-strong" : "text-ink"
+                  }`}
+                >
+                  Recipes must contain video
+                </span>
+                <span
+                  aria-hidden
+                  className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                    filters.hasVideo
+                      ? "border-accent bg-accent text-on-accent"
+                      : "border-line bg-paper"
+                  }`}
+                >
+                  {filters.hasVideo && <Check size={12} strokeWidth={3} />}
+                </span>
+              </button>
               <button
                 ref={inPageCtaRef}
                 type="button"
@@ -346,16 +377,31 @@ export default function Form() {
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 16px)" }}
         >
           <div className="mx-auto max-w-md px-5 pt-3 pb-2">
-            <label className="mb-4 flex cursor-pointer items-center justify-center gap-3 text-strong text-ink">
-              <input
-                type="checkbox"
-                checked={filters.hasVideo ?? false}
-                onChange={(e) => update({ hasVideo: e.target.checked })}
-                style={{ accentColor: "var(--color-accent)" }}
-                className="h-6 w-6 cursor-pointer"
-              />
-              <span>Only recipes with a video</span>
-            </label>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={filters.hasVideo ?? false}
+              onClick={() => update({ hasVideo: !(filters.hasVideo ?? false) })}
+              className="focus-ring mb-4 flex min-h-14 w-full items-center justify-between gap-3 rounded-button border border-line bg-paper-soft px-5 transition-colors active:border-ink-faint"
+            >
+              <span
+                className={`text-strong font-medium transition-colors ${
+                  filters.hasVideo ? "text-accent-strong" : "text-ink"
+                }`}
+              >
+                Recipes must contain video
+              </span>
+              <span
+                aria-hidden
+                className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                  filters.hasVideo
+                    ? "border-accent bg-accent text-on-accent"
+                    : "border-line bg-paper"
+                }`}
+              >
+                {filters.hasVideo && <Check size={14} strokeWidth={3} />}
+              </span>
+            </button>
             <button
               type="button"
               onClick={findRecipes}

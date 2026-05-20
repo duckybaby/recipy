@@ -344,6 +344,9 @@ export default function Results() {
         <FilterSubtitle
           count={recipes.length}
           filtersSummary={summarizeFilters(lastSearch?.filters ?? filters)}
+          hasVideo={
+            (lastSearch?.filters ?? filters).hasVideo ?? false
+          }
           onEdit={() => setEditOpen(true)}
         />
 
@@ -445,10 +448,12 @@ function ResultsHeader({
 function FilterSubtitle({
   count,
   filtersSummary,
+  hasVideo,
   onEdit,
 }: {
   count: number;
   filtersSummary: string;
+  hasVideo: boolean;
   onEdit: () => void;
 }) {
   if (count === 0) return null;
@@ -456,7 +461,8 @@ function FilterSubtitle({
   return (
     <div>
       <p className="text-caption text-ink-muted">
-        Showing {count} {recipeWord} for
+        Showing {count} {recipeWord}
+        {hasVideo ? " with video" : ""} for
       </p>
       <p className="mt-1 truncate text-body text-ink">{filtersSummary}</p>
       <button

@@ -25,7 +25,7 @@ import {
   motion,
   type PanInfo,
 } from "framer-motion";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { ChipGroup } from "./ChipGroup";
 import {
   COOK_OPTIONS,
@@ -283,39 +283,45 @@ export function EditChoicesSheet({
                   onChange={(next) => patch({ dishTypes: next as DishType[] })}
                 />
 
-                {/* Has-video checkbox (M4) — same primitive Form uses
-                    now. Bottom of the chip list since it's a yes/no
-                    preference, not a chip group. */}
-                <label className="flex cursor-pointer items-center gap-3 rounded-card border border-line bg-paper-soft px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={filters.hasVideo ?? false}
-                    onChange={(e) => patch({ hasVideo: e.target.checked })}
-                    style={{ accentColor: "var(--color-accent)" }}
-                    className="h-5 w-5 shrink-0 cursor-pointer"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-strong font-medium text-ink">
-                      Only recipes with a video
-                    </p>
-                    <p className="mt-1 text-caption text-ink-muted">
-                      Prefers pages with an embedded video.
-                    </p>
-                  </div>
-                </label>
               </div>
             </div>
 
-            {/* Footer — pinned Update CTA. Border separates it from
-                the scrolling body. Safe-area-bottom padding keeps the
-                button clear of the iOS home indicator. Disabled until
-                the user has actually changed something. */}
+            {/* Footer — pinned Update CTA + the video toggle above it.
+                Border separates it from the scrolling body. Safe-area-bottom
+                padding keeps the button clear of the iOS home indicator.
+                Update CTA disabled until the user has actually changed
+                something. */}
             <div
               className="shrink-0 border-t border-line bg-paper px-5 pt-3"
               style={{
                 paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
               }}
             >
+              <button
+                type="button"
+                role="switch"
+                aria-checked={filters.hasVideo ?? false}
+                onClick={() => patch({ hasVideo: !(filters.hasVideo ?? false) })}
+                className="focus-ring mb-4 flex min-h-14 w-full items-center justify-between gap-3 rounded-button border border-line bg-paper-soft px-5 transition-colors active:border-ink-faint"
+              >
+                <span
+                  className={`text-strong font-medium transition-colors ${
+                    filters.hasVideo ? "text-accent-strong" : "text-ink"
+                  }`}
+                >
+                  Recipes must contain video
+                </span>
+                <span
+                  aria-hidden
+                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                    filters.hasVideo
+                      ? "border-accent bg-accent text-on-accent"
+                      : "border-line bg-paper"
+                  }`}
+                >
+                  {filters.hasVideo && <Check size={14} strokeWidth={3} />}
+                </span>
+              </button>
               <button
                 type="button"
                 disabled={!isDirty}
