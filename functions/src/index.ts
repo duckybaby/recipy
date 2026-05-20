@@ -165,6 +165,61 @@ function asyncHandler(
   };
 }
 
+/** Fetch a recipe source page once and extract two signals:
+ *    - `pageOk`: did the source URL return 2xx? Anthropic's web_search
+ *      tool is supposed to surface real URLs, but Sonnet sometimes
+ *      shroomnets a plausible-looking one that 404s on direct fetch.
+ *      Recipes with !pageOk are dropped before emission — better to
+ *      ship fewer real recipes than fabricated ones whose Source link
+ *      404s when the user taps through.
+ *    - `ogImage`: the URL from `<meta property="og:image">` if present.
+ *      Anthropic can't read meta tags reliably (web_search returns
+ *      snippets, never full HTML), so it fabricates WordPress-pattern
+ *      image URLs that 404. Extracting server-side eliminates that.
+ *
+ *  Same single GET serves both signals — no redundant fetches. Regex
+ *  tolerates both attribute orders (property=…content=… or the reverse)
+ *  and both quote styles. Entity-decoding skipped — og:image rarely
+ *  contains encoded entities, and a missed escape just falls through
+ *  to the browser's onError handler on the Recipe page. */
+async function fetchAndExtractOgImage(pageUrl: string): Promise<{
+  pageOk: boolean;
+  ogImage: string | null;
+}> {
+  try {
+    const res = await fetch(pageUrl, {
+      signal: AbortSignal.timeout(5000),
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (recipy source verifier) AppleWebKit/537.36",
+      },
+      redirect: "follow",
+    });
+    if (!res.ok) {
+      console.warn(
+        `fetchAndExtractOgImage: source ${res.status} ${res.statusText} for ${pageUrl}`,
+      );
+      return { pageOk: false, ogImage: null };
+    }
+    const html = await res.text();
+    const propFirst = html.match(
+      /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+    );
+    if (propFirst) return { pageOk: true, ogImage: propFirst[1] };
+    const contentFirst = html.match(
+      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+    );
+    if (contentFirst) return { pageOk: true, ogImage: contentFirst[1] };
+    return { pageOk: true, ogImage: null };
+  } catch (err) {
+    console.warn(
+      `fetchAndExtractOgImage: fetch error for ${pageUrl}:`,
+      err instanceof Error ? err.message : String(err),
+    );
+    return { pageOk: false, ogImage: null };
+  }
+}
+
 /** Fetch the first byte of imageUrl with a 3s timeout. Returns the URL
  *  on any 2xx (200 full / 206 partial), null otherwise. Verifies the URL
  *  is hotlinkable from a server context before the Recipe page ever
@@ -300,14 +355,30 @@ app.post(
           const withId = reIdRecipe(obj);
           const valid = safeParseRecipe(withId);
           if (valid) {
-            // Validate hero image before emitting. A 400/403/timeout on
-            // the imageUrl produces a broken-image icon on the Recipe
-            // page — better to null it out at the source and let the
-            // paper-soft placeholder render. Adds up to 2s per recipe
-            // when the URL hangs, near-zero when it's reachable.
-            valid.source.imageUrl = await validateImageUrl(
-              valid.source.imageUrl,
+            // Verify the source URL is real + extract og:image in one
+            // fetch. Sonnet occasionally shroomnets both the source URL
+            // (a plausible-looking page that 404s) and the imageUrl (a
+            // WordPress-pattern image path that doesn't exist). A single
+            // GET on source.url gives us both signals: page status (drop
+            // the recipe entirely if it's dead) and the real og:image
+            // meta tag (overwrites Anthropic's value either way).
+            const { pageOk, ogImage } = await fetchAndExtractOgImage(
+              valid.source.url,
             );
+            if (!pageOk) {
+              console.warn(
+                `dropped shroomnet recipe (dead source URL): "${valid.title.slice(
+                  0,
+                  80,
+                )}" — ${valid.source.url}`,
+              );
+              continue;
+            }
+            // og:image still goes through validateImageUrl because a
+            // hotlinkable page can still ship a signed-CDN og:image that
+            // 4xx's standalone (Dotdash family). Returns null in that
+            // case → clean placeholder on the Recipe page.
+            valid.source.imageUrl = await validateImageUrl(ogImage);
             collected.push(valid);
             writeLine({ type: "recipe", recipe: valid });
           } else {
@@ -393,10 +464,23 @@ app.post(
         );
         continue;
       }
-      // Same image validation as /api/search-recipes — null out the
-      // imageUrl if it won't hotlink, so the Recipe page renders a
-      // clean placeholder rather than a broken-image icon.
-      valid.source.imageUrl = await validateImageUrl(valid.source.imageUrl);
+      // Same source-URL + og:image flow as /api/search-recipes.
+      // Source URL dead → skip this candidate and try the next one;
+      // the surrounding for-loop naturally falls through to the 404
+      // response if no candidate has a real source.
+      const { pageOk, ogImage } = await fetchAndExtractOgImage(
+        valid.source.url,
+      );
+      if (!pageOk) {
+        console.warn(
+          `alternate-source: dropped shroomnet recipe (dead URL): "${valid.title.slice(
+            0,
+            80,
+          )}" — ${valid.source.url}`,
+        );
+        continue;
+      }
+      valid.source.imageUrl = await validateImageUrl(ogImage);
       res.json({ recipe: valid });
       await upsertLibraryRecipe(valid);
       return;
